@@ -269,3 +269,109 @@ class TDSConvCTCModule(pl.LightningModule):
             optimizer_config=self.hparams.optimizer,
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
+    
+
+    
+class SimpleCNNCTCModule(pl.LightningModule):
+    """A CNN-based module for keystroke prediction from EMG spectrograms."""
+
+    NUM_BANDS: int = 2
+    ELECTRODE_CHANNELS: int = 16
+
+    def __init__(
+        self,
+        in_features: int,
+        mlp_features: Sequence[int],
+        block_channels: Sequence[int],
+        kernel_width: int,
+        optimizer: DictConfig,
+        lr_scheduler: DictConfig,
+        decoder: DictConfig,
+    ) -> None:
+        super().__init__()
+        self.save_hyperparameters()
+
+        num_features = self.NUM_BANDS * mlp_features[-1]  # Keep it consistent
+
+        # Model definition
+        self.model = nn.Sequential(
+            nn.Conv2d(self.NUM_BANDS, block_channels[0], kernel_size=kernel_width, stride=1, padding=kernel_width // 2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+
+            nn.Conv2d(block_channels[0], block_channels[1], kernel_size=kernel_width, stride=1, padding=kernel_width // 2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+
+            nn.Conv2d(block_channels[1], block_channels[2], kernel_size=kernel_width, stride=1, padding=kernel_width // 2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+
+            nn.Flatten(),
+            nn.Linear(block_channels[2] * 4 * 4, num_features),
+            nn.ReLU(),
+            nn.Linear(num_features, charset().num_classes),
+            nn.LogSoftmax(dim=-1),
+        )
+
+        # Loss function
+        self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
+
+        # Decoder
+        self.decoder = decoder  # Keeping it aligned with TDSConvCTCModule
+
+        # Metrics
+        metrics = MetricCollection([CharacterErrorRates()])
+        self.metrics = nn.ModuleDict({
+            f"{phase}_metrics": metrics.clone(prefix=f"{phase}/")
+            for phase in ["train", "val", "test"]
+        })
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        return self.model(inputs)
+
+    def _step(self, phase: str, batch: dict[str, torch.Tensor]) -> torch.Tensor:
+        inputs = batch["inputs"]
+        targets = batch["targets"]
+        input_lengths = batch["input_lengths"]
+        target_lengths = batch["target_lengths"]
+        N = len(input_lengths)
+
+        emissions = self.forward(inputs)
+
+        loss = self.ctc_loss(
+            log_probs=emissions, 
+            targets=targets.transpose(0, 1), 
+            input_lengths=input_lengths, 
+            target_lengths=target_lengths, 
+        )
+
+        metrics = self.metrics[f"{phase}_metrics"]
+        self.log(f"{phase}/loss", loss, batch_size=N, sync_dist=True)
+        return loss
+
+    def _epoch_end(self, phase: str) -> None:
+        metrics = self.metrics[f"{phase}_metrics"]
+        self.log_dict(metrics.compute(), sync_dist=True)
+        metrics.reset()
+
+    def training_step(self, batch, batch_idx) -> torch.Tensor:
+        return self._step("train", batch)
+
+    def validation_step(self, batch, batch_idx) -> torch.Tensor:
+        return self._step("val", batch)
+
+    def test_step(self, batch, batch_idx) -> torch.Tensor:
+        return self._step("test", batch)
+
+    def on_train_epoch_end(self) -> None:
+        self._epoch_end("train")
+
+    def on_validation_epoch_end(self) -> None:
+        self._epoch_end("val")
+
+    def on_test_epoch_end(self) -> None:
+        self._epoch_end("test")
+
+    def configure_optimizers(self):
+        return Adam(self.parameters(), lr=self.hparams.optimizer["lr"])
