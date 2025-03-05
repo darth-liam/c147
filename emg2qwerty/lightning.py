@@ -271,7 +271,7 @@ class TDSConvCTCModule(pl.LightningModule):
         )
     
 
-    
+
 class SimpleCNNCTCModule(pl.LightningModule):
     """A CNN-based module for keystroke prediction from EMG spectrograms."""
 
@@ -373,5 +373,9 @@ class SimpleCNNCTCModule(pl.LightningModule):
     def on_test_epoch_end(self) -> None:
         self._epoch_end("test")
 
-    def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.hparams.optimizer["lr"])
+    def configure_optimizers(self) -> dict[str, Any]:
+        return utils.instantiate_optimizer_and_scheduler(
+            self.parameters(),
+            optimizer_config=self.hparams.optimizer,
+            lr_scheduler_config=self.hparams.lr_scheduler,
+        )
