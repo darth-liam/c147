@@ -269,8 +269,8 @@ class TDSConvCTCModule(pl.LightningModule):
             optimizer_config=self.hparams.optimizer,
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
-    
-    
+
+
 class SimpleCNNCTCModule(pl.LightningModule):
     """A CNN-based module for keystroke prediction from EMG spectrograms."""
 
@@ -329,16 +329,16 @@ class SimpleCNNCTCModule(pl.LightningModule):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         # Ensure correct input shape: (T, N, bands, C, freq) → (T, N, bands, freq, C)
-        inputs = inputs.permute(0, 1, 3, 4, 2)  
-        T, N, bands, freq, C = inputs.shape  
+        inputs = inputs.permute(0, 1, 3, 4, 2)  # (T, N, bands, freq, C) --> (T, N, bands, freq, C)
+        T, N, bands, freq, C = inputs.shape  # Check your dimensions for correctness
         
         # Merge batch and time for CNN processing
-        inputs = inputs.reshape(T * N, bands, freq, C)  
-        features = self.cnn_encoder(inputs)  
+        inputs = inputs.reshape(T * N, bands, freq, C)  # (T * N, bands, freq, C)
+        features = self.cnn_encoder(inputs)  # Apply CNN layers
 
         # Flatten and reshape back to (T, N, -1)
         features = features.view(T, N, -1)
-        emissions = self.fc(features)  
+        emissions = self.fc(features)  # Final FC layer to get logits
 
         return emissions  
 

@@ -278,7 +278,8 @@ class TDSConvEncoder(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.tds_conv_blocks(inputs)  # (T, N, num_features)
-
+    
+    
 class SimpleCNN(nn.Module):
     """A basic convolutional neural network for processing EMG spectrograms."""
     
@@ -300,13 +301,13 @@ class SimpleCNN(nn.Module):
         )
         
         self.fc_layers = nn.Sequential(
-            nn.Linear(128 * 4 * 4, 256),
+            nn.Linear(128 * 4 * 4, 256),  # Adjust the size based on the final feature map
             nn.ReLU(),
             nn.Linear(256, num_classes)
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.conv_layers(x)
-        x = x.view(x.size(0), -1)  # Flatten
-        x = self.fc_layers(x)
+        x = self.conv_layers(x)  # Apply conv layers
+        x = x.view(x.size(0), -1)  # Flatten the output
+        x = self.fc_layers(x)  # Apply FC layers
         return x
