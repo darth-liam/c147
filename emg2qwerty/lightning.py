@@ -270,8 +270,7 @@ class TDSConvCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
     
-
-
+    
 class SimpleCNNCTCModule(pl.LightningModule):
     """A CNN-based module for keystroke prediction from EMG spectrograms."""
 
@@ -291,23 +290,24 @@ class SimpleCNNCTCModule(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        num_features = self.NUM_BANDS * mlp_features[-1]  # Keep it consistent
+        num_features = self.NUM_BANDS * mlp_features[-1]  
 
-        # Model definition
-        self.model = nn.Sequential(
+        # Model definition (keeping temporal dimension)
+        self.cnn_encoder = nn.Sequential(
             nn.Conv2d(self.NUM_BANDS, block_channels[0], kernel_size=kernel_width, stride=1, padding=kernel_width // 2),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
 
             nn.Conv2d(block_channels[0], block_channels[1], kernel_size=kernel_width, stride=1, padding=kernel_width // 2),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
 
             nn.Conv2d(block_channels[1], block_channels[2], kernel_size=kernel_width, stride=1, padding=kernel_width // 2),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
+        )
 
-            nn.Flatten(),
+        self.fc = nn.Sequential(
             nn.Linear(block_channels[2] * 4 * 4, num_features),
             nn.ReLU(),
             nn.Linear(num_features, charset().num_classes),
@@ -317,8 +317,8 @@ class SimpleCNNCTCModule(pl.LightningModule):
         # Loss function
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
 
-        # Decoder
-        self.decoder = decoder  # Keeping it aligned with TDSConvCTCModule
+        # Decoder (same as TDSConvCTCModule)
+        self.decoder = instantiate(decoder)
 
         # Metrics
         metrics = MetricCollection([CharacterErrorRates()])
@@ -328,7 +328,19 @@ class SimpleCNNCTCModule(pl.LightningModule):
         })
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.model(inputs)
+        # Ensure correct input shape: (T, N, bands, C, freq) → (T, N, bands, freq, C)
+        inputs = inputs.permute(0, 1, 3, 4, 2)  
+        T, N, bands, freq, C = inputs.shape  
+        
+        # Merge batch and time for CNN processing
+        inputs = inputs.reshape(T * N, bands, freq, C)  
+        features = self.cnn_encoder(inputs)  
+
+        # Flatten and reshape back to (T, N, -1)
+        features = features.view(T, N, -1)
+        emissions = self.fc(features)  
+
+        return emissions  
 
     def _step(self, phase: str, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         inputs = batch["inputs"]
@@ -339,14 +351,31 @@ class SimpleCNNCTCModule(pl.LightningModule):
 
         emissions = self.forward(inputs)
 
+        # Adjust input lengths for CNN downsampling
+        T_diff = inputs.shape[0] - emissions.shape[0]
+        emission_lengths = input_lengths - T_diff
+
         loss = self.ctc_loss(
             log_probs=emissions, 
             targets=targets.transpose(0, 1), 
-            input_lengths=input_lengths, 
+            input_lengths=emission_lengths, 
             target_lengths=target_lengths, 
         )
 
+        # Decode emissions
+        predictions = self.decoder.decode_batch(
+            emissions=emissions.detach().cpu().numpy(),
+            emission_lengths=emission_lengths.detach().cpu().numpy(),
+        )
+
+        # Update metrics
         metrics = self.metrics[f"{phase}_metrics"]
+        targets = targets.detach().cpu().numpy()
+        target_lengths = target_lengths.detach().cpu().numpy()
+        for i in range(N):
+            target = LabelData.from_labels(targets[: target_lengths[i], i])
+            metrics.update(prediction=predictions[i], target=target)
+
         self.log(f"{phase}/loss", loss, batch_size=N, sync_dist=True)
         return loss
 
