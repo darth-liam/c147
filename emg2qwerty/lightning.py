@@ -274,7 +274,7 @@ class TDSConvCTCModule(pl.LightningModule):
 class SimpleCNNCTCModule(pl.LightningModule):
     """A CNN-based module for keystroke prediction from EMG spectrograms."""
 
-    NUM_BANDS: int = 2
+    NUM_BANDS: int = 16  # Update this to match the number of input channels
     ELECTRODE_CHANNELS: int = 16
 
     def __init__(
@@ -329,82 +329,15 @@ class SimpleCNNCTCModule(pl.LightningModule):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         # Ensure correct input shape: (T, N, bands, C, freq) → (T, N, bands, freq, C)
-        inputs = inputs.permute(0, 1, 3, 4, 2)  # (T, N, bands, freq, C) --> (T, N, bands, freq, C)
-        T, N, bands, freq, C = inputs.shape  # Check your dimensions for correctness
+        inputs = inputs.permute(0, 1, 3, 4, 2)  # Change this to match your input shape
+        T, N, bands, freq, C = inputs.shape  
         
         # Merge batch and time for CNN processing
-        inputs = inputs.reshape(T * N, bands, freq, C)  # (T * N, bands, freq, C)
-        features = self.cnn_encoder(inputs)  # Apply CNN layers
+        inputs = inputs.reshape(T * N, bands, freq, C)  
+        features = self.cnn_encoder(inputs)  
 
         # Flatten and reshape back to (T, N, -1)
         features = features.view(T, N, -1)
-        emissions = self.fc(features)  # Final FC layer to get logits
+        emissions = self.fc(features)  
 
         return emissions  
-
-    def _step(self, phase: str, batch: dict[str, torch.Tensor]) -> torch.Tensor:
-        inputs = batch["inputs"]
-        targets = batch["targets"]
-        input_lengths = batch["input_lengths"]
-        target_lengths = batch["target_lengths"]
-        N = len(input_lengths)
-
-        emissions = self.forward(inputs)
-
-        # Adjust input lengths for CNN downsampling
-        T_diff = inputs.shape[0] - emissions.shape[0]
-        emission_lengths = input_lengths - T_diff
-
-        loss = self.ctc_loss(
-            log_probs=emissions, 
-            targets=targets.transpose(0, 1), 
-            input_lengths=emission_lengths, 
-            target_lengths=target_lengths, 
-        )
-
-        # Decode emissions
-        predictions = self.decoder.decode_batch(
-            emissions=emissions.detach().cpu().numpy(),
-            emission_lengths=emission_lengths.detach().cpu().numpy(),
-        )
-
-        # Update metrics
-        metrics = self.metrics[f"{phase}_metrics"]
-        targets = targets.detach().cpu().numpy()
-        target_lengths = target_lengths.detach().cpu().numpy()
-        for i in range(N):
-            target = LabelData.from_labels(targets[: target_lengths[i], i])
-            metrics.update(prediction=predictions[i], target=target)
-
-        self.log(f"{phase}/loss", loss, batch_size=N, sync_dist=True)
-        return loss
-
-    def _epoch_end(self, phase: str) -> None:
-        metrics = self.metrics[f"{phase}_metrics"]
-        self.log_dict(metrics.compute(), sync_dist=True)
-        metrics.reset()
-
-    def training_step(self, batch, batch_idx) -> torch.Tensor:
-        return self._step("train", batch)
-
-    def validation_step(self, batch, batch_idx) -> torch.Tensor:
-        return self._step("val", batch)
-
-    def test_step(self, batch, batch_idx) -> torch.Tensor:
-        return self._step("test", batch)
-
-    def on_train_epoch_end(self) -> None:
-        self._epoch_end("train")
-
-    def on_validation_epoch_end(self) -> None:
-        self._epoch_end("val")
-
-    def on_test_epoch_end(self) -> None:
-        self._epoch_end("test")
-
-    def configure_optimizers(self) -> dict[str, Any]:
-        return utils.instantiate_optimizer_and_scheduler(
-            self.parameters(),
-            optimizer_config=self.hparams.optimizer,
-            lr_scheduler_config=self.hparams.lr_scheduler,
-        )
