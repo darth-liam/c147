@@ -310,7 +310,7 @@ class SimpleCNN2dBlock(nn.Module):
 
         return self.layer_norm(x)
 
-class SimpleCNNFCBlock(nn.Module):
+class CNNFCBlock(nn.Module):
     def __init__(self, num_features: int) -> None:
         super().__init__()
         self.fc_block = nn.Sequential(
@@ -344,7 +344,7 @@ class SimpleCNNEncoder(nn.Module):
                 simple_cnn_conv_blocks.extend(
                     [
                         SimpleCNN2dBlock(channels, num_features // channels, kernel_width),
-                        SimpleCNNFCBlock(num_features),
+                        CNNFCBlock(num_features),
                     ]
                 )
             self.simple_cnn_conv_blocks = nn.Sequential(*simple_cnn_conv_blocks)
@@ -352,4 +352,71 @@ class SimpleCNNEncoder(nn.Module):
         def forward(self, inputs: torch.Tensor) -> torch.Tensor:
             return self.simple_cnn_conv_blocks(inputs)  # (T, N, num_features)
     
+
+class MultiLayerCNNBlock(nn.Module):
+    """A 4-layer CNN block for processing EMG spectrograms."""
     
+    def __init__(self, channels: int, width: int, kernel_width: int) -> None:
+        super().__init__()
+        self.channels = channels
+        self.width = width
+        
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(channels, channels, kernel_size=(1, kernel_width), padding=(0, kernel_width // 2)),
+            nn.ReLU(),
+            nn.BatchNorm2d(channels),
+
+            nn.Conv2d(channels, channels, kernel_size=(1, kernel_width), padding=(0, kernel_width // 2)),
+            nn.ReLU(),
+            nn.BatchNorm2d(channels),
+
+            nn.Conv2d(channels, channels, kernel_size=(1, kernel_width), padding=(0, kernel_width // 2)),
+            nn.ReLU(),
+            nn.BatchNorm2d(channels),
+
+            nn.Conv2d(channels, channels, kernel_size=(1, kernel_width), padding=(0, kernel_width // 2)),
+            nn.ReLU(),
+            nn.BatchNorm2d(channels),
+        )
+
+        self.layer_norm = nn.LayerNorm(channels * width)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        T_in, N, C = inputs.shape
+
+        x = inputs.movedim(0, -1).reshape(N, self.channels, self.width, T_in)
+        x = self.conv_layers(x)  # Pass through 4 convolutional layers
+        x = x.reshape(N, C, -1).movedim(-1, 0)
+
+        T_out = x.shape[0]
+        x = x + inputs[-T_out:]
+
+        return self.layer_norm(x)
+
+
+
+class MultiLayerCNNEncoder(nn.Module):
+        def __init__(
+        self,
+        num_features: int,
+        block_channels: Sequence[int] = (24, 24, 24, 24),
+        kernel_width: int = 32,
+    ) -> None:
+            super().__init__()
+
+            assert len(block_channels) > 0
+            simple_cnn_conv_blocks: list[nn.Module] = []
+            for channels in block_channels:
+                assert (
+                    num_features % channels == 0
+                ), "block_channels must evenly divide num_features"
+                simple_cnn_conv_blocks.extend(
+                    [
+                        MultiLayerCNNBlock(channels, num_features // channels, kernel_width),
+                        CNNFCBlock(num_features),
+                    ]
+                )
+            self.simple_cnn_conv_blocks = nn.Sequential(*simple_cnn_conv_blocks)
+
+        def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+            return self.simple_cnn_conv_blocks(inputs)  # (T, N, num_features)
