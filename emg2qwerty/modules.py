@@ -388,9 +388,6 @@ class MultiLayerCNNBlock(nn.Module):
         x = self.conv_layers(x)  # Pass through 4 convolutional layers
         x = x.reshape(N, C, -1).movedim(-1, 0)
         T_out = x.shape[0]
-
-        print(f"T_in: {T_in}, T_out: {T_out}, inputs.shape: {inputs.shape}, x.shape: {x.shape}")
-        
         x = x + inputs[-T_out:]
 
         return self.layer_norm(x)
