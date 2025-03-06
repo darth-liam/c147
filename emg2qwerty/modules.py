@@ -302,7 +302,6 @@ class SimpleCNN2dBlock(nn.Module):
 
         x = inputs.movedim(0,-1).reshape(N,self.channels, self.width, T_in)
         x = self.conv2d(x)
-        print(f"Shape after Conv2D: {x.shape}")
         x = self.relu(x) 
         x = x.reshape(N, C, -1).movedim(-1,0)
 
