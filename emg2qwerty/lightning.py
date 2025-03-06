@@ -304,8 +304,8 @@ class SimpleCNNCTCModule(pl.LightningModule):
             SimpleCNNEncoder(
                 num_features=num_features,
                 block_channels=block_channels,
-                kernel_width=kernel_width,
-            )
+                kernel_width=kernel_width
+            ),
 
             nn.Linear(num_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
