@@ -387,7 +387,6 @@ class MultiLayerCNNBlock(nn.Module):
         x = inputs.movedim(0, -1).reshape(N, self.channels, self.width, T_in)
         x = self.conv_layers(x)  # Pass through 4 convolutional layers
         x = x.reshape(N, C, -1).movedim(-1, 0)
-
         T_out = x.shape[0]
         x = x + inputs[-T_out:]
 
@@ -405,18 +404,18 @@ class MultiLayerCNNEncoder(nn.Module):
             super().__init__()
 
             assert len(block_channels) > 0
-            simple_cnn_conv_blocks: list[nn.Module] = []
+            multi_layer_cnn_conv_blocks: list[nn.Module] = []
             for channels in block_channels:
                 assert (
                     num_features % channels == 0
                 ), "block_channels must evenly divide num_features"
-                simple_cnn_conv_blocks.extend(
+                multi_layer_cnn_conv_blocks.extend(
                     [
                         MultiLayerCNNBlock(channels, num_features // channels, kernel_width),
                         CNNFCBlock(num_features),
                     ]
                 )
-            self.simple_cnn_conv_blocks = nn.Sequential(*simple_cnn_conv_blocks)
+            self.multi_layer_cnn_conv_blocks = nn.Sequential(*multi_layer_cnn_conv_blocks)
 
         def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-            return self.simple_cnn_conv_blocks(inputs)  # (T, N, num_features)
+            return self.multi_layer_cnn_conv_blocks(inputs)  # (T, N, num_features)
