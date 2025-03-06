@@ -369,13 +369,20 @@ class LSTMBlock(nn.Module):
         """
         T_in, N, C = inputs.shape
         
+        # Pass through LSTM
         lstm_out, _ = self.lstm(inputs)  # Shape: (T, N, hidden_size * num_directions)
-        T_out = lstm_out.shape[0]
         
-        # Residual connection (aligning dimensions)
-        x = lstm_out + inputs[-T_out:]
+        # Residual connection (aligning dimensions if needed)
+        if lstm_out.shape[-1] != inputs.shape[-1]:
+            # Make sure dimensions match by using a linear layer to transform the LSTM output
+            lstm_out = self.fc(lstm_out)
         
+        # Apply residual connection (alignment is taken care of here)
+        x = lstm_out + inputs
+        
+        # Normalize and return
         return self.layer_norm(x)
+
     
 
 class CNNFCBlock(nn.Module):
