@@ -373,10 +373,6 @@ class MultiLayerCNNBlock(nn.Module):
             nn.Conv2d(channels, channels, kernel_size=(1, kernel_width), padding=(0, kernel_width // 2 - 1)),
             nn.ReLU(),
             nn.BatchNorm2d(channels),
-
-            nn.Conv2d(channels, channels, kernel_size=(1, kernel_width), padding=(0, kernel_width // 2 - 1)),
-            nn.ReLU(),
-            nn.BatchNorm2d(channels),
         )
 
         self.layer_norm = nn.LayerNorm(channels * width)
