@@ -356,11 +356,12 @@ class MultiLayerCNNBlock(nn.Module):
     
 
 class LSTMBlock(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, output_size, bidirectional=True, dropout=0.3):
+    def __init__(self, input_size, hidden_size, num_layers, bidirectional=True, dropout=0.3):
         super(LSTMBlock, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.bidirectional = bidirectional
+        
         self.lstm = nn.LSTM(
             input_size=input_size, 
             hidden_size=hidden_size, 
@@ -369,32 +370,25 @@ class LSTMBlock(nn.Module):
             bidirectional=bidirectional,
             dropout=dropout
         )
-        self.layer_norm = nn.LayerNorm(input_size)
         
+        # Linear layer to align LSTM output with input size if needed
+        num_directions = 2 if bidirectional else 1
+        self.fc = nn.Linear(hidden_size * num_directions, input_size) if hidden_size * num_directions != input_size else nn.Identity()
+        
+        self.layer_norm = nn.LayerNorm(input_size)
+
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """
         inputs: (T, N, C) - (Time, Batch, Channels)
-        Outputs: Same shape as input (T, N, C)
+        outputs: (T, N, C) - same shape as inputs
         """
-        T_in, N, C = inputs.shape
+        lstm_out, _ = self.lstm(inputs)  # Shape: (T, N, hidden_size * num_directions)
+        lstm_out = self.fc(lstm_out)  # Align dimensions if needed
         
-        # Initialize hidden and cell states (hx and cx) with zeros
-        h0 = torch.zeros(self.num_layers * (1 + self.bidirectional), N, self.hidden_size, device=inputs.device)
-        c0 = torch.zeros(self.num_layers * (1 + self.bidirectional), N, self.hidden_size, device=inputs.device)
+        # Residual connection and normalization
+        x = self.layer_norm(lstm_out + inputs)
+        return x
 
-        # Pass through LSTM
-        lstm_out, _ = self.lstm(inputs, (h0, c0))  # Shape: (T, N, hidden_size * num_directions)
-        
-        # Residual connection (aligning dimensions if needed)
-        if lstm_out.shape[-1] != inputs.shape[-1]:
-            # Make sure dimensions match by using a linear layer to transform the LSTM output
-            lstm_out = self.fc(lstm_out)
-        
-        # Apply residual connection (alignment is taken care of here)
-        x = lstm_out + inputs
-        
-        # Normalize and return
-        return self.layer_norm(x)  
 
     
 
