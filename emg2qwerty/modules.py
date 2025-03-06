@@ -309,48 +309,6 @@ class SimpleCNN2dBlock(nn.Module):
         x = x + inputs[-T_out:]
 
         return self.layer_norm(x)
-
-class CNNFCBlock(nn.Module):
-    def __init__(self, num_features: int) -> None:
-        super().__init__()
-        self.fc_block = nn.Sequential(
-            nn.Linear(num_features, num_features),
-            nn.ReLU(),
-            nn.Linear(num_features, num_features),
-        )
-        self.layer_norm = nn.LayerNorm(num_features)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        x = inputs
-        x = self.fc_block(x)
-        x = x + inputs
-        return self.layer_norm(x)
-
-class SimpleCNNEncoder(nn.Module):
-        def __init__(
-        self,
-        num_features: int,
-        block_channels: Sequence[int] = (24, 24, 24, 24),
-        kernel_width: int = 32,
-    ) -> None:
-            super().__init__()
-
-            assert len(block_channels) > 0
-            simple_cnn_conv_blocks: list[nn.Module] = []
-            for channels in block_channels:
-                assert (
-                    num_features % channels == 0
-                ), "block_channels must evenly divide num_features"
-                simple_cnn_conv_blocks.extend(
-                    [
-                        SimpleCNN2dBlock(channels, num_features // channels, kernel_width),
-                        CNNFCBlock(num_features),
-                    ]
-                )
-            self.simple_cnn_conv_blocks = nn.Sequential(*simple_cnn_conv_blocks)
-
-        def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-            return self.simple_cnn_conv_blocks(inputs)  # (T, N, num_features)
     
 
 class MultiLayerCNNBlock(nn.Module):
@@ -387,8 +345,106 @@ class MultiLayerCNNBlock(nn.Module):
         x = x + inputs[-T_out:]
 
         return self.layer_norm(x)
+    
+class LSTMBlock(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, output_size, bidirectional=True, dropout=0.3):
+        super(LSTMBlock, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.bidirectional = bidirectional
+        self.lstm = nn.LSTM(
+            input_size=input_size, 
+            hidden_size=hidden_size, 
+            num_layers=num_layers, 
+            batch_first=True, 
+            bidirectional=bidirectional,
+            dropout=dropout
+        )
+        self.layer_norm = nn.LayerNorm(input_size)
+        
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """
+        inputs: (T, N, C) - (Time, Batch, Channels)
+        Outputs: Same shape as input (T, N, C)
+        """
+        T_in, N, C = inputs.shape
+        
+        lstm_out, _ = self.lstm(inputs)  # Shape: (T, N, hidden_size * num_directions)
+        T_out = lstm_out.shape[0]
+        
+        # Residual connection (aligning dimensions)
+        x = lstm_out + inputs[-T_out:]
+        
+        return self.layer_norm(x)
+    
+
+class CNNFCBlock(nn.Module):
+    def __init__(self, num_features: int) -> None:
+        super().__init__()
+        self.fc_block = nn.Sequential(
+            nn.Linear(num_features, num_features),
+            nn.ReLU(),
+            nn.Linear(num_features, num_features),
+        )
+        self.layer_norm = nn.LayerNorm(num_features)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        x = inputs
+        x = self.fc_block(x)
+        x = x + inputs
+        return self.layer_norm(x)
+    
+
+class LSTMFCBlock(nn.Module):
+    """A fully connected block for LSTM feature refinement."""
+    
+    def __init__(self, num_features: int) -> None:
+        super().__init__()
+        self.fc_block = nn.Sequential(
+            nn.Linear(num_features, num_features),
+            nn.ReLU(),
+            nn.Linear(num_features, num_features),
+        )
+        self.layer_norm = nn.LayerNorm(num_features)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """
+        inputs: (T, N, C) - (Time, Batch, Features)
+        Outputs: Same shape as input (T, N, C)
+        """
+        x = inputs
+        x = self.fc_block(x)
+        x = x + inputs  # Residual connection
+        return self.layer_norm(x)
 
 
+
+class SimpleCNNEncoder(nn.Module):
+        def __init__(
+        self,
+        num_features: int,
+        block_channels: Sequence[int] = (24, 24, 24, 24),
+        kernel_width: int = 32,
+    ) -> None:
+            super().__init__()
+
+            assert len(block_channels) > 0
+            simple_cnn_conv_blocks: list[nn.Module] = []
+            for channels in block_channels:
+                assert (
+                    num_features % channels == 0
+                ), "block_channels must evenly divide num_features"
+                simple_cnn_conv_blocks.extend(
+                    [
+                        SimpleCNN2dBlock(channels, num_features // channels, kernel_width),
+                        CNNFCBlock(num_features),
+                    ]
+                )
+            self.simple_cnn_conv_blocks = nn.Sequential(*simple_cnn_conv_blocks)
+
+        def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+            return self.simple_cnn_conv_blocks(inputs)  # (T, N, num_features)
+    
 
 class MultiLayerCNNEncoder(nn.Module):
         def __init__(
@@ -415,3 +471,33 @@ class MultiLayerCNNEncoder(nn.Module):
 
         def forward(self, inputs: torch.Tensor) -> torch.Tensor:
             return self.multi_layer_cnn_conv_blocks(inputs)  # (T, N, num_features)
+        
+
+class LSTMEncoder(nn.Module):
+    """An LSTM-based encoder for processing sequential EMG features."""
+
+    def __init__(
+        self,
+        num_features: int,
+        hidden_sizes: Sequence[int] = (24, 24, 24, 24),
+        num_layers: int = 2,
+        bidirectional: bool = True,
+        dropout: float = 0.3,
+    ) -> None:
+        super().__init__()
+
+        assert len(hidden_sizes) > 0
+        lstm_blocks: list[nn.Module] = []
+        
+        for hidden_size in hidden_sizes:
+            lstm_blocks.extend(
+                [
+                    LSTMBlock(num_features, hidden_size, num_layers, bidirectional, dropout),
+                    LSTMFCBlock(num_features),
+                ]
+            )
+
+        self.lstm_blocks = nn.Sequential(*lstm_blocks)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        return self.lstm_blocks(inputs)  # (T, N, num_features)
