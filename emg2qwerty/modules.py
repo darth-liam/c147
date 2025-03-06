@@ -371,8 +371,8 @@ class LSTMBlock(nn.Module):
         T_in, N, C = inputs.shape
         
         # Initialize hidden and cell states (hx and cx) with zeros
-        h0 = torch.zeros(self.num_layers * (1 + self.bidirectional), N, self.hidden_size).to(inputs.device)
-        c0 = torch.zeros(self.num_layers * (1 + self.bidirectional), N, self.hidden_size).to(inputs.device)
+        h0 = torch.zeros(self.num_layers * (1 + self.bidirectional), N, self.hidden_size, device=inputs.device)
+        c0 = torch.zeros(self.num_layers * (1 + self.bidirectional), N, self.hidden_size, device=inputs.device)
 
         # Pass through LSTM
         lstm_out, _ = self.lstm(inputs, (h0, c0))  # Shape: (T, N, hidden_size * num_directions)
