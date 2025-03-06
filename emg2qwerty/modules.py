@@ -346,6 +346,7 @@ class MultiLayerCNNBlock(nn.Module):
 
         return self.layer_norm(x)
     
+
 class LSTMBlock(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, output_size, bidirectional=True, dropout=0.3):
         super(LSTMBlock, self).__init__()
@@ -369,8 +370,12 @@ class LSTMBlock(nn.Module):
         """
         T_in, N, C = inputs.shape
         
+        # Initialize hidden and cell states (hx and cx) with zeros
+        h0 = torch.zeros(self.num_layers * (1 + self.bidirectional), N, self.hidden_size).to(inputs.device)
+        c0 = torch.zeros(self.num_layers * (1 + self.bidirectional), N, self.hidden_size).to(inputs.device)
+
         # Pass through LSTM
-        lstm_out, _ = self.lstm(inputs)  # Shape: (T, N, hidden_size * num_directions)
+        lstm_out, _ = self.lstm(inputs, (h0, c0))  # Shape: (T, N, hidden_size * num_directions)
         
         # Residual connection (aligning dimensions if needed)
         if lstm_out.shape[-1] != inputs.shape[-1]:
@@ -381,7 +386,7 @@ class LSTMBlock(nn.Module):
         x = lstm_out + inputs
         
         # Normalize and return
-        return self.layer_norm(x)
+        return self.layer_norm(x)  
 
     
 
@@ -423,7 +428,6 @@ class LSTMFCBlock(nn.Module):
         x = self.fc_block(x)
         x = x + inputs  # Residual connection
         return self.layer_norm(x)
-
 
 
 class SimpleCNNEncoder(nn.Module):
