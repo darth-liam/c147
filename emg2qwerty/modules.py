@@ -280,34 +280,77 @@ class TDSConvEncoder(nn.Module):
         return self.tds_conv_blocks(inputs)  # (T, N, num_features)
     
     
-class SimpleCNN(nn.Module):
+class SimpleCNN2dBlock(nn.Module):
     """A basic convolutional neural network for processing EMG spectrograms."""
     
-    def __init__(self, input_channels: int, num_classes: int):
+    def __init__(self, channels: int, width: int, kernel_width: int) -> None:
         super().__init__()
+        self.channels = channels
+        self.width = width
         
-        self.conv_layers = nn.Sequential(
-            nn.Conv2d(input_channels, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv2d = nn.Conv2d(
+            in_channels=channels, 
+            out_channels=channels, 
+            kernel_size=(1,kernel_width),
+            #output (T,N,num_features-kernal_width+1)
         )
-        
-        self.fc_layers = nn.Sequential(
-            nn.Linear(128 * 4 * 4, 256),  # Adjust the size based on the final feature map
-            nn.ReLU(),
-            nn.Linear(256, num_classes)
-        )
+        self.relu = nn.ReLU()
+        self.layer_norm = nn.LayerNorm(channels*width)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.conv_layers(x)  # Apply conv layers
-        x = x.view(x.size(0), -1)  # Flatten the output
-        x = self.fc_layers(x)  # Apply FC layers
-        return x
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        T_in,N,C = inputs.shape
+
+        x = inputs.movedim(0,-1).reshape(N,self.channels, self.width, T_in)
+        x = self.conv2d(x)
+        print(f"Shape after Conv2D: {x.shape}")
+        x = self.relu(x) 
+        x = x.reshape(N, C, -1).movedim(-1,0)
+
+        T_out = x.shape[0]
+        x = x + inputs[-T_out:]
+
+        return self.layer_norm(x)
+
+class SimpleCNNFCBlock(nn.Module):
+    def __init__(self, num_features: int) -> None:
+        super().__init__()
+        self.fc_block = nn.Sequential(
+            nn.Linear(num_features, num_features),
+            nn.ReLU(),
+            nn.Linear(num_features, num_features),
+        )
+        self.layer_norm = nn.LayerNorm(num_features)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        x = inputs
+        x = self.fc_block(x)
+        x = x + inputs
+        return self.layer_norm(x)
+
+class SimpleCNNEncoder(nn.Module):
+        def __init__(
+        self,
+        num_features: int,
+        block_channels: Sequence[int] = (24, 24, 24, 24),
+        kernel_width: int = 32,
+    ) -> None:
+            super().__init__()
+
+            assert len(block_channels) > 0
+            simple_cnn_conv_blocks: list[nn.Module] = []
+            for channels in block_channels:
+                assert (
+                    num_features % channels == 0
+                ), "block_channels must evenly divide num_features"
+                simple_cnn_conv_blocks.extend(
+                    [
+                        SimpleCNN2dBlock(channels, num_features // channels, kernel_width),
+                        SimpleCNNFCBlock(num_features),
+                    ]
+                )
+            self.simple_cnn_conv_blocks = nn.Sequential(*simple_cnn_conv_blocks)
+
+        def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+            return self.simple_cnn_conv_blocks(inputs)  # (T, N, num_features)
+    
+    

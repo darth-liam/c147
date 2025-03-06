@@ -274,8 +274,8 @@ class TDSConvCTCModule(pl.LightningModule):
 class SimpleCNNCTCModule(pl.LightningModule):
     """A CNN-based module for keystroke prediction from EMG spectrograms."""
 
-    NUM_BANDS: int = 16  # Update this to match the number of input channels
-    ELECTRODE_CHANNELS: int = 16
+    NUM_BANDS: ClassVar[int] = 2
+    ELECTRODE_CHANNELS: ClassVar[int] = 16
 
     def __init__(
         self,
@@ -293,23 +293,19 @@ class SimpleCNNCTCModule(pl.LightningModule):
         num_features = self.NUM_BANDS * mlp_features[-1]  
 
         # Model definition (keeping temporal dimension)
-        self.cnn_encoder = nn.Sequential(
-            nn.Conv2d(self.NUM_BANDS, block_channels[0], kernel_size=kernel_width, stride=1, padding=kernel_width // 2),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
+        #inputs: (T,N,bands=2, electrode channels = 16, freq)
+        self.model = nn.Sequential(
+            # (T,N,bands,C,freq)
+            SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
+            MultiBandRotationInvariantMLP(in_features=in_features, mlp_features=mlp_features, num_bands=self.NUM_BANDS),
+            #(T,N,num_features)
+            nn.Flatten(start_dim=2),
+            SimpleCNNEncoder(
+                num_features=num_features,
+                block_channels=block_channels,
+                kernel_width=kernel_width,
+            )
 
-            nn.Conv2d(block_channels[0], block_channels[1], kernel_size=kernel_width, stride=1, padding=kernel_width // 2),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
-
-            nn.Conv2d(block_channels[1], block_channels[2], kernel_size=kernel_width, stride=1, padding=kernel_width // 2),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
-        )
-
-        self.fc = nn.Sequential(
-            nn.Linear(block_channels[2] * 4 * 4, num_features),
-            nn.ReLU(),
             nn.Linear(num_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
         )
@@ -326,18 +322,78 @@ class SimpleCNNCTCModule(pl.LightningModule):
             f"{phase}_metrics": metrics.clone(prefix=f"{phase}/")
             for phase in ["train", "val", "test"]
         })
-
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        # Ensure correct input shape: (T, N, bands, C, freq) → (T, N, bands, freq, C)
-        inputs = inputs.permute(0, 1, 3, 4, 2)  # Change this to match your input shape
-        T, N, bands, freq, C = inputs.shape  
-        
-        # Merge batch and time for CNN processing
-        inputs = inputs.reshape(T * N, bands, freq, C)  
-        features = self.cnn_encoder(inputs)  
+        return self.model(inputs)
 
-        # Flatten and reshape back to (T, N, -1)
-        features = features.view(T, N, -1)
-        emissions = self.fc(features)  
+    def _step(
+        self, phase: str, batch: dict[str, torch.Tensor], *args, **kwargs
+    ) -> torch.Tensor:
+        inputs = batch["inputs"]
+        targets = batch["targets"]
+        input_lengths = batch["input_lengths"]
+        target_lengths = batch["target_lengths"]
+        N = len(input_lengths)  # batch_size
 
-        return emissions  
+        emissions = self.forward(inputs)
+
+        # Shrink input lengths by an amount equivalent to the conv encoder's
+        # temporal receptive field to compute output activation lengths for CTCLoss.
+        # NOTE: This assumes the encoder doesn't perform any temporal downsampling
+        # such as by striding.
+        T_diff = inputs.shape[0] - emissions.shape[0]
+        emission_lengths = input_lengths - T_diff
+
+        loss = self.ctc_loss(
+            log_probs=emissions,  # (T, N, num_classes)
+            targets=targets.transpose(0, 1),  # (T, N) -> (N, T)
+            input_lengths=emission_lengths,  # (N,)
+            target_lengths=target_lengths,  # (N,)
+        )
+
+        # Decode emissions
+        predictions = self.decoder.decode_batch(
+            emissions=emissions.detach().cpu().numpy(),
+            emission_lengths=emission_lengths.detach().cpu().numpy(),
+        )
+
+        # Update metrics
+        metrics = self.metrics[f"{phase}_metrics"]
+        targets = targets.detach().cpu().numpy()
+        target_lengths = target_lengths.detach().cpu().numpy()
+        for i in range(N):
+            # Unpad targets (T, N) for batch entry
+            target = LabelData.from_labels(targets[: target_lengths[i], i])
+            metrics.update(prediction=predictions[i], target=target)
+
+        self.log(f"{phase}/loss", loss, batch_size=N, sync_dist=True)
+        return loss
+
+    def _epoch_end(self, phase: str) -> None:
+        metrics = self.metrics[f"{phase}_metrics"]
+        self.log_dict(metrics.compute(), sync_dist=True)
+        metrics.reset()
+
+    def training_step(self, *args, **kwargs) -> torch.Tensor:
+        return self._step("train", *args, **kwargs)
+
+    def validation_step(self, *args, **kwargs) -> torch.Tensor:
+        return self._step("val", *args, **kwargs)
+
+    def test_step(self, *args, **kwargs) -> torch.Tensor:
+        return self._step("test", *args, **kwargs)
+
+    def on_train_epoch_end(self) -> None:
+        self._epoch_end("train")
+
+    def on_validation_epoch_end(self) -> None:
+        self._epoch_end("val")
+
+    def on_test_epoch_end(self) -> None:
+        self._epoch_end("test")
+
+    def configure_optimizers(self) -> dict[str, Any]:
+        return utils.instantiate_optimizer_and_scheduler(
+            self.parameters(),
+            optimizer_config=self.hparams.optimizer,
+            lr_scheduler_config=self.hparams.lr_scheduler,
+        )
