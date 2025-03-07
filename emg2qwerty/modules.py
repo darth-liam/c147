@@ -389,8 +389,63 @@ class LSTMBlock(nn.Module):
         x = self.layer_norm(lstm_out + inputs)
         return x
 
+class GRUBlock(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, bidirectional=True, dropout=0.3):
+        super(GRUBlock, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.bidirectional = bidirectional
 
-    
+        self.gru = nn.GRU(
+            input_size=input_size, 
+            hidden_size=hidden_size, 
+            num_layers=num_layers, 
+            batch_first=True, 
+            bidirectional=bidirectional,
+            dropout=dropout
+        )
+
+        num_directions = 2 if bidirectional else 1
+        self.fc = nn.Linear(hidden_size * num_directions, input_size) if hidden_size * num_directions != input_size else nn.Identity()
+        
+        self.layer_norm = nn.LayerNorm(input_size)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """
+        inputs: (T, N, C) - (Time, Batch, Channels)
+        outputs: (T, N, C) - same shape as inputs
+        """
+        T_in, N, C = inputs.shape
+        
+        # Pass through GRU
+        gru_out, _ = self.gru(inputs)  # Shape: (T, N, hidden_size * num_directions)
+        gru_out = self.fc(gru_out)  # Align dimensions if needed
+
+        # Residual connection and normalization
+        x = self.layer_norm(gru_out + inputs)
+        return x
+
+class TransformerBlock(nn.Module):
+    """A Transformer encoder block with multi-head self-attention and feed-forward layers."""
+    def __init__(self, embed_dim, num_heads, feedforward_dim, dropout=0.1):
+        super().__init__()
+        self.attention = nn.MultiheadAttention(embed_dim, num_heads, dropout=dropout, batch_first=True)
+        self.feed_forward = nn.Sequential(
+            nn.Linear(embed_dim, feedforward_dim),
+            nn.ReLU(),
+            nn.Linear(feedforward_dim, embed_dim),
+        )
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        attn_output, _ = self.attention(inputs, inputs, inputs)
+        x = self.norm1(inputs + self.dropout(attn_output))
+        ff_output = self.feed_forward(x)
+        return self.norm2(x + self.dropout(ff_output))
+
+
 
 class CNNFCBlock(nn.Module):
     def __init__(self, num_features: int) -> None:
@@ -430,6 +485,56 @@ class LSTMFCBlock(nn.Module):
         x = self.fc_block(x)
         x = x + inputs  # Residual connection
         return self.layer_norm(x)
+
+class GRUFCBlock(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, output_size, bidirectional=True, dropout=0.3):
+        super(GRUFCBlock, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.bidirectional = bidirectional
+
+        self.gru = nn.GRU(
+            input_size=input_size, 
+            hidden_size=hidden_size, 
+            num_layers=num_layers, 
+            batch_first=True, 
+            bidirectional=bidirectional,
+            dropout=dropout
+        )
+
+        num_directions = 2 if bidirectional else 1
+        self.fc = nn.Linear(hidden_size * num_directions, output_size)
+        self.layer_norm = nn.LayerNorm(input_size)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """
+        inputs: (T, N, C)
+        outputs: (T, N, output_size)
+        """
+        T_in, N, C = inputs.shape
+
+        # Pass through GRU
+        gru_out, _ = self.gru(inputs)  # (T, N, hidden_size * num_directions)
+        x = self.layer_norm(gru_out + inputs)  # Residual connection
+        x = self.fc(x)  # Fully connected layer
+        return x
+
+
+class TransformerFCBlock(nn.Module):
+    """A fully connected block for feature refinement with residual connection and normalization."""
+    def __init__(self, num_features: int) -> None:
+        super().__init__()
+        self.fc_block = nn.Sequential(
+            nn.Linear(num_features, num_features),
+            nn.ReLU(),
+            nn.Linear(num_features, num_features),
+        )
+        self.layer_norm = nn.LayerNorm(num_features)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        x = inputs
+        x = self.fc_block(x)
+        return self.layer_norm(x + inputs)
 
 
 class SimpleCNNEncoder(nn.Module):
@@ -514,3 +619,66 @@ class LSTMEncoder(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.lstm_blocks(inputs)  # (T, N, num_features)
+
+
+
+class GRUEncoder(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, output_size, bidirectional=True, dropout=0.3):
+        super(GRUEncoder, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.bidirectional = bidirectional
+
+        self.gru = nn.GRU(
+            input_size=input_size, 
+            hidden_size=hidden_size, 
+            num_layers=num_layers, 
+            batch_first=True, 
+            bidirectional=bidirectional,
+            dropout=dropout
+        )
+
+        num_directions = 2 if bidirectional else 1
+        self.fc = nn.Linear(hidden_size * num_directions, output_size)
+        self.layer_norm = nn.LayerNorm(input_size)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """
+        inputs: (T, N, C)
+        outputs: (N, output_size) - Encodes sequence into a single vector
+        """
+        T_in, N, C = inputs.shape
+
+        # Pass through GRU
+        gru_out, _ = self.gru(inputs)  # (T, N, hidden_size * num_directions)
+        x = self.layer_norm(gru_out + inputs)  # Residual connection
+
+        # Take the last time step
+        x = x[-1]  # Shape: (N, hidden_size * num_directions)
+
+        # Fully connected layer
+        x = self.fc(x)  # Shape: (N, output_size)
+        return x
+    
+class TransformerEncoder(nn.Module):
+    """A stack of Transformer blocks for sequence encoding."""
+    def __init__(
+        self,
+        num_features: int,
+        block_channels: Sequence[int] = (24, 24, 24, 24),
+        num_heads: int = 8,
+        feedforward_dim: int = 256,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.blocks = nn.ModuleList([
+            TransformerBlock(num_features, num_heads, feedforward_dim, dropout)
+            for _ in block_channels
+        ])
+        self.fc_block = TransformerFCBlock(num_features)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        x = inputs
+        for block in self.blocks:
+            x = block(x)
+        return self.fc_block(x)

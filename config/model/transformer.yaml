@@ -1,0 +1,16 @@
+# @package _global_
+module:
+  _target_: emg2qwerty.lightning.TransformerEncoderCTCModule
+  in_features: 528  # freq * channels = (n_fft // 2 + 1) * 16
+  mlp_features: [384]
+  block_channels: [24, 24, 24, 24]  # Matching the number of CNN/LSTM layers
+  num_heads: 8  # Number of attention heads
+  feedforward_dim: 512  # Dimension of the feedforward network
+  num_layers: 4  # Number of transformer layers
+  dropout: 0.1  # Dropout for transformer layers
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000  # 4 sec windows for 2kHz EMG
+  padding: [1800, 200]  # 900ms past context, 100ms future context
+
