@@ -383,40 +383,6 @@ class MultiLayerCNNBlock(nn.Module):
         return self.layer_norm(x)
     
 
-class LSTMBlock(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, bidirectional=True, dropout=0.3):
-        super(LSTMBlock, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.bidirectional = bidirectional
-        
-        self.lstm = nn.LSTM(
-            input_size=input_size, 
-            hidden_size=hidden_size, 
-            num_layers=num_layers, 
-            batch_first=True, 
-            bidirectional=bidirectional,
-            dropout=dropout
-        )
-        
-        # Linear layer to align LSTM output with input size if needed
-        num_directions = 2 if bidirectional else 1
-        self.fc = nn.Linear(hidden_size * num_directions, input_size) if hidden_size * num_directions != input_size else nn.Identity()
-        
-        self.layer_norm = nn.LayerNorm(input_size)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """
-        inputs: (T, N, C) - (Time, Batch, Channels)
-        outputs: (T, N, C) - same shape as inputs
-        """
-        lstm_out, _ = self.lstm(inputs)  # Shape: (T, N, hidden_size * num_directions)
-        lstm_out = self.fc(lstm_out)  # Align dimensions if needed
-        
-        # Residual connection and normalization
-        x = self.layer_norm(lstm_out + inputs)
-        return x
-
 class GRUBlock(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, bidirectional=True, dropout=0.3):
         super(GRUBlock, self).__init__()
@@ -490,29 +456,7 @@ class CNNFCBlock(nn.Module):
         x = self.fc_block(x)
         x = x + inputs
         return self.layer_norm(x)
-    
 
-class LSTMFCBlock(nn.Module):
-    """A fully connected block for LSTM feature refinement."""
-    
-    def __init__(self, num_features: int) -> None:
-        super().__init__()
-        self.fc_block = nn.Sequential(
-            nn.Linear(num_features, num_features),
-            nn.ReLU(),
-            nn.Linear(num_features, num_features),
-        )
-        self.layer_norm = nn.LayerNorm(num_features)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """
-        inputs: (T, N, C) - (Time, Batch, Features)
-        Outputs: Same shape as input (T, N, C)
-        """
-        x = inputs
-        x = self.fc_block(x)
-        x = x + inputs  # Residual connection
-        return self.layer_norm(x)
 
 class GRUFCBlock(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, output_size, bidirectional=True, dropout=0.3):
@@ -618,37 +562,30 @@ class MultiLayerCNNEncoder(nn.Module):
         def forward(self, inputs: torch.Tensor) -> torch.Tensor:
             return self.multi_layer_cnn_conv_blocks(inputs)  # (T, N, num_features)
         
-
 class LSTMEncoder(nn.Module):
-    """An LSTM-based encoder for processing sequential EMG features."""
-
     def __init__(
         self,
         num_features: int,
-        hidden_sizes: Sequence[int] = (24, 24, 24, 24),
-        num_layers: int = 2,
-        bidirectional: bool = True,
-        dropout: float = 0.3,
+        lstm_hidden_size: int = 128,
+        num_lstm_layers: int = 4,
     ) -> None:
         super().__init__()
 
-        assert len(hidden_sizes) > 0
-        lstm_blocks: list[nn.Module] = []
+        self.lstm_layers = nn.LSTM(
+            input_size=num_features,
+            hidden_size=lstm_hidden_size,
+            num_layers=num_lstm_layers,
+            batch_first=False,
+            bidirectional=True,
+        )
         
-        for hidden_size in hidden_sizes:
-            lstm_blocks.extend(
-                [
-                    LSTMBlock(num_features, hidden_size, num_layers, bidirectional, dropout),
-                    LSTMFCBlock(num_features),
-                ]
-            )
-
-        self.lstm_blocks = nn.Sequential(*lstm_blocks)
+        self.out_layer = nn.Linear(lstm_hidden_size * 2, num_features)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.lstm_blocks(inputs)  # (T, N, num_features)
+        x, _ = self.lstm_layers(inputs)
+        x = self.out_layer(x)
 
-
+        return x
 
 class GRUEncoder(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, output_size, bidirectional=True, dropout=0.3):

@@ -661,7 +661,6 @@ class MultiLayerCNNCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
 
-
 class LSTMEncoderCTCModule(pl.LightningModule):
     """An LSTM-based module for keystroke prediction from EMG spectrograms."""
 
@@ -672,10 +671,8 @@ class LSTMEncoderCTCModule(pl.LightningModule):
         self,
         in_features: int,
         mlp_features: Sequence[int],
-        hidden_sizes: Sequence[int],
-        num_layers: int,
-        bidirectional: bool,
-        dropout: float,
+        lstm_hidden_size: int,
+        num_lstm_layers: int,
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
@@ -689,15 +686,17 @@ class LSTMEncoderCTCModule(pl.LightningModule):
         self.model = nn.Sequential(
             # (T, N, bands=2, electrode_channels=16, freq)
             SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
-            MultiBandRotationInvariantMLP(in_features=in_features, mlp_features=mlp_features, num_bands=self.NUM_BANDS),
+            MultiBandRotationInvariantMLP(
+                in_features=in_features, 
+                mlp_features=mlp_features, 
+                num_bands=self.NUM_BANDS
+            ),
             # (T, N, num_features)
             nn.Flatten(start_dim=2),
             LSTMEncoder(
                 num_features=num_features,
-                hidden_sizes=hidden_sizes,
-                num_layers=num_layers,
-                bidirectional=bidirectional,
-                dropout=dropout,
+                lstm_hidden_size=lstm_hidden_size,
+                num_lstm_layers=num_lstm_layers,
             ),
             nn.Linear(num_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
@@ -706,7 +705,7 @@ class LSTMEncoderCTCModule(pl.LightningModule):
         # Loss function
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
 
-        # Decoder (same as CNNCTCModule)
+        # Decoder
         self.decoder = instantiate(decoder)
 
         # Metrics
@@ -731,13 +730,13 @@ class LSTMEncoderCTCModule(pl.LightningModule):
         emissions = self.forward(inputs)
 
         # Adjust input lengths (assuming LSTM doesn't change temporal resolution)
-        emission_lengths = input_lengths  
+        emission_lengths = input_lengths
 
         loss = self.ctc_loss(
-            log_probs=emissions,  # (T, N, num_classes)
-            targets=targets.transpose(0, 1),  # (N, T)
-            input_lengths=emission_lengths,  # (N,)
-            target_lengths=target_lengths,  # (N,)
+            log_probs=emissions,  
+            targets=targets.transpose(0, 1),  
+            input_lengths=emission_lengths,  
+            target_lengths=target_lengths,  
         )
 
         # Decode emissions
