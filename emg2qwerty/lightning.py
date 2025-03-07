@@ -28,7 +28,9 @@ from emg2qwerty.modules import (
     SimpleCNNEncoder,
     MultiLayerCNNEncoder,
     LSTMEncoder,
-    TDSLSTMEncoder
+    TDSLSTMEncoder,
+    GRUEncoder,
+    HybridEncoder,
 )
 from emg2qwerty.transforms import Transform
 
