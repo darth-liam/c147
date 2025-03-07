@@ -601,7 +601,7 @@ class GRUEncoder(nn.Module):
             batch_first=True, 
             bidirectional=bidirectional,
             dropout=dropout
-        )
+        ),
 
         num_directions = 2 if bidirectional else 1
         self.fc = nn.Linear(hidden_size * num_directions, output_size)
@@ -639,7 +639,7 @@ class TransformerEncoder(nn.Module):
         self.blocks = nn.ModuleList([
             TransformerBlock(num_features, num_heads, feedforward_dim, dropout)
             for _ in block_channels
-        ])
+        ]),
         self.fc_block = TransformerFCBlock(num_features)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -666,7 +666,7 @@ class HybridEncoder(nn.Module):
         super().__init__()
 
         # TDSConv for initial feature extraction
-        self.tdsconv = TDSConv(num_features, tds_channels, kernel_size=tds_kernel_size, dropout=dropout)
+        self.tdsconv = TDSConv2dBlock(num_features, tds_channels, kernel_size=tds_kernel_size, dropout=dropout)
 
         # GRU for sequence modeling
         self.gru = GRUBlock(
@@ -675,7 +675,7 @@ class HybridEncoder(nn.Module):
             num_layers=num_gru_layers,
             bidirectional=True,
             dropout=dropout
-        )
+        ),
 
         # Transformer for capturing long-range dependencies
         self.transformer = TransformerEncoder(
@@ -684,7 +684,7 @@ class HybridEncoder(nn.Module):
             num_heads=transformer_heads,
             feedforward_dim=transformer_ff_dim,
             dropout=dropout
-        )
+        ),
 
         # Fully connected block for final feature refinement
         self.fc_block = CNNFCBlock(num_features)
