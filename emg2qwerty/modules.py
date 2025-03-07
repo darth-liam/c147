@@ -647,3 +647,51 @@ class TransformerEncoder(nn.Module):
         for block in self.blocks:
             x = block(x)
         return self.fc_block(x)
+
+
+class HybridEncoder(nn.Module):
+    """A hybrid encoder combining TDSConv, GRU, and Transformer layers for keystroke prediction."""
+    def __init__(
+        self,
+        num_features: int,
+        tds_channels: int = 64,
+        tds_kernel_size: int = 3,
+        gru_hidden_size: int = 128,
+        num_gru_layers: int = 2,
+        transformer_heads: int = 8,
+        transformer_ff_dim: int = 512,
+        num_transformer_layers: int = 2,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+
+        # TDSConv for initial feature extraction
+        self.tdsconv = TDSConv(num_features, tds_channels, kernel_size=tds_kernel_size, dropout=dropout)
+
+        # GRU for sequence modeling
+        self.gru = GRUBlock(
+            input_size=tds_channels,
+            hidden_size=gru_hidden_size,
+            num_layers=num_gru_layers,
+            bidirectional=True,
+            dropout=dropout
+        )
+
+        # Transformer for capturing long-range dependencies
+        self.transformer = TransformerEncoder(
+            num_features=gru_hidden_size * 2,  # Bidirectional GRU output size
+            block_channels=[transformer_heads] * num_transformer_layers,
+            num_heads=transformer_heads,
+            feedforward_dim=transformer_ff_dim,
+            dropout=dropout
+        )
+
+        # Fully connected block for final feature refinement
+        self.fc_block = CNNFCBlock(num_features)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        x = self.tdsconv(inputs)  # (T, N, tds_channels)
+        x = self.gru(x)  # (T, N, gru_hidden_size * 2)
+        x = self.transformer(x)  # (T, N, gru_hidden_size * 2)
+        x = self.fc_block(x)  # (T, N, num_features)
+        return x
