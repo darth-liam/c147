@@ -293,9 +293,6 @@ class TDSLSTMCTCModule(pl.LightningModule):
         self.save_hyperparameters()
 
         num_features = self.NUM_BANDS * mlp_features[-1]
-
-        # Model
-        # inputs: (T, N, bands=2, electrode_channels=16, freq)
         self.model = nn.Sequential(
             # (T, N, bands=2, C=16, freq)
             SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
@@ -311,7 +308,7 @@ class TDSLSTMCTCModule(pl.LightningModule):
                 num_features = num_features,
                 lstm_hidden_size = 128,
                 num_lstm_layers = 4,
-            )
+            ),
             # (T, N, num_classes)
             nn.Linear(num_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
