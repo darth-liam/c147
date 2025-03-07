@@ -275,10 +275,6 @@ class TDSConvCTCModule(pl.LightningModule):
         )
 
 
-
-
-
-
 class TDSLSTMCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
@@ -314,7 +310,7 @@ class TDSLSTMCTCModule(pl.LightningModule):
             TDSLSTMEncoder(
                 num_features = num_features,
                 lstm_hidden_size = 128,
-                num_lstm_layers = 4
+                num_lstm_layers = 4,
             )
             # (T, N, num_classes)
             nn.Linear(num_features, charset().num_classes),
@@ -411,10 +407,6 @@ class TDSLSTMCTCModule(pl.LightningModule):
             optimizer_config=self.hparams.optimizer,
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
-
-
-
-
 
 
 

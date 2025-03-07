@@ -308,26 +308,6 @@ class TDSLSTMEncoder(nn.Module):
 
         return x
 
-        assert len(block_channels) > 0
-        tds_conv_blocks: list[nn.Module] = []
-        for channels in block_channels:
-            assert (
-                num_features % channels == 0
-            ), "block_channels must evenly divide num_features"
-            tds_conv_blocks.extend(
-                [
-                    TDSConv2dBlock(channels, num_features // channels, kernel_width),
-                    TDSFullyConnectedBlock(num_features),
-                ]
-            )
-        self.tds_conv_blocks = nn.Sequential(*tds_conv_blocks)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.tds_conv_blocks(inputs)  # (T, N, num_features)
-    
-
-
-
 class SimpleCNN2dBlock(nn.Module):
     """A basic convolutional neural network for processing EMG spectrograms."""
     
