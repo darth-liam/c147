@@ -813,7 +813,7 @@ class GRUCTCModule(pl.LightningModule):
         num_features = self.NUM_BANDS * self.ELECTRODE_CHANNELS
 
         # Define the GRU encoder
-        self.encoder = nn.GRU(
+        self.encoder = nn.GRUEncoder(
             input_size=in_features,
             hidden_size=hidden_size,
             num_layers=num_layers,
@@ -851,7 +851,7 @@ class GRUCTCModule(pl.LightningModule):
         x = self.fc(gru_out)
         return x
 
-    def _step(self, phase: str, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def _step(self, phase: str, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         inputs = batch["inputs"]
         targets = batch["targets"]
         input_lengths = batch["input_lengths"]
