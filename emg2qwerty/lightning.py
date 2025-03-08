@@ -839,14 +839,16 @@ class GRUCTCModule(pl.LightningModule):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.model(inputs)
-
-    def _step(self, phase: str, batch: dict[str, torch.Tensor]) -> torch.Tensor:
+    
+    
+    def _step(
+        self, phase: str, batch: dict[str, torch.Tensor], *args, **kwargs
+    ) -> torch.Tensor:
         inputs = batch["inputs"]
         targets = batch["targets"]
         input_lengths = batch["input_lengths"]
         target_lengths = batch["target_lengths"]
-        N = len(input_lengths)
-
+        N = len(input_lengths)  # batch_size
         emissions = self.forward(inputs)
 
         # Compute adjusted sequence lengths
