@@ -2,9 +2,9 @@
 module:
   _target_: emg2qwerty.lightning.GRUCTCModule
   in_features: 128
-  num_gru_layers: 2
   dropout: 0.3
   output_classes: 10
+
 
 datamodule:
   _target_: emg2qwerty.lightning.WindowedEMGDataModule
