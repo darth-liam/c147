@@ -787,20 +787,16 @@ class LSTMEncoderCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
 
-
 class GRUCTCModule(pl.LightningModule):
-    """A GRU-based module for keystroke prediction from EMG spectrograms."""
-
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
 
     def __init__(
         self,
         in_features: int,
-        hidden_size: int,
-        num_layers: int,
-        bidirectional: bool,
-        dropout: float,
+        mlp_features: Sequence[int],
+        block_channels: Sequence[int],
+        kernel_width: int,
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
@@ -808,23 +804,31 @@ class GRUCTCModule(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        num_features = self.NUM_BANDS * self.ELECTRODE_CHANNELS
+        num_features = self.NUM_BANDS * mlp_features[-1]
 
-        # Model definition
+        # Model
         self.model = nn.Sequential(
-            SpectrogramNorm(channels=num_features),
-            GRUEncoder(
-                input_size=in_features,
-                hidden_size=hidden_size,
-                num_layers=num_layers,
-                bidirectional=bidirectional,
-                dropout=dropout,
+            # (T, N, bands=2, C=16, freq)
+            SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
+            # (T, N, bands=2, mlp_features[-1])
+            MultiBandRotationInvariantMLP(
+                in_features=in_features,
+                mlp_features=mlp_features,
+                num_bands=self.NUM_BANDS,
             ),
-            nn.Linear(hidden_size * (2 if bidirectional else 1), charset().num_classes),
+            # (T, N, num_features)
+            nn.Flatten(start_dim=2),
+            GRUEncoder(
+                num_features=num_features,
+                gru_hidden_size=128,  # You can change this
+                num_gru_layers=2,  # Adjust layers based on your needs
+            ),
+            # (T, N, num_classes)
+            nn.Linear(num_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
         )
 
-        # Loss function
+        # Criterion
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
 
         # Decoder
@@ -832,15 +836,16 @@ class GRUCTCModule(pl.LightningModule):
 
         # Metrics
         metrics = MetricCollection([CharacterErrorRates()])
-        self.metrics = nn.ModuleDict({
-            f"{phase}_metrics": metrics.clone(prefix=f"{phase}/")
-            for phase in ["train", "val", "test"]
-        })
+        self.metrics = nn.ModuleDict(
+            {
+                f"{phase}_metrics": metrics.clone(prefix=f"{phase}/")
+                for phase in ["train", "val", "test"]
+            }
+        )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.model(inputs)
-    
-    
+
     def _step(
         self, phase: str, batch: dict[str, torch.Tensor], *args, **kwargs
     ) -> torch.Tensor:
@@ -849,16 +854,19 @@ class GRUCTCModule(pl.LightningModule):
         input_lengths = batch["input_lengths"]
         target_lengths = batch["target_lengths"]
         N = len(input_lengths)  # batch_size
+
         emissions = self.forward(inputs)
 
-        # Compute adjusted sequence lengths
-        emission_lengths = input_lengths  # GRU maintains input length
+        # Shrink input lengths by an amount equivalent to the conv encoder's
+        # temporal receptive field to compute output activation lengths for CTCLoss.
+        T_diff = inputs.shape[0] - emissions.shape[0]
+        emission_lengths = input_lengths - T_diff
 
         loss = self.ctc_loss(
-            log_probs=emissions,
-            targets=targets.transpose(0, 1),
-            input_lengths=emission_lengths,
-            target_lengths=target_lengths,
+            log_probs=emissions,  # (T, N, num_classes)
+            targets=targets.transpose(0, 1),  # (T, N) -> (N, T)
+            input_lengths=emission_lengths,  # (N,)
+            target_lengths=target_lengths,  # (N,)
         )
 
         # Decode emissions

@@ -588,33 +588,29 @@ class LSTMEncoder(nn.Module):
         return x
     
 
-    
 class GRUEncoder(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, bidirectional=True, dropout=0.3):
-        super(GRUEncoder, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.bidirectional = bidirectional
-
+    def __init__(
+        self,
+        num_features: int,
+        gru_hidden_size: int = 128,
+        num_gru_layers: int = 2,
+        dropout: float = 0.3,
+    ):
+        super().__init__()
         self.gru = nn.GRU(
-            input_size=input_size, 
-            hidden_size=hidden_size, 
-            num_layers=num_layers, 
-            batch_first=True, 
-            bidirectional=bidirectional,
-            dropout=dropout if num_layers > 1 else 0.0,  # Avoid dropout if num_layers=1
+            input_size=num_features,  # The input features to the GRU (num_features)
+            hidden_size=gru_hidden_size,  # The hidden size
+            num_layers=num_gru_layers,  # Number of GRU layers
+            batch_first=False,  # Keeping batch first dimension false for time-first format
+            dropout=dropout if num_gru_layers > 1 else 0.0,
+            bidirectional=False,
         )
+        self.output_layer = nn.Linear(gru_hidden_size, charset().num_classes)  # Mapping GRU output to classes
 
-        num_directions = 2 if bidirectional else 1
-        self.fc = nn.Linear(hidden_size * num_directions, hidden_size)  # Projection layer
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """
-        inputs: (T, N, C)
-        outputs: (T, N, hidden_size * num_directions)
-        """
-        gru_out, _ = self.gru(inputs)  # (T, N, hidden_size * num_directions)
-        x = self.fc(gru_out)  # (T, N, hidden_size)
-        return x
-
-    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # GRU expects input shape (T, N, input_size)
+        gru_output, _ = self.gru(x)  # Output shape: (T, N, hidden_size)
+        
+        # Pass the GRU output through a linear layer to map to class logits
+        output = self.output_layer(gru_output)  # (T, N, num_classes)
+        return output
