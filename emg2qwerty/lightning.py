@@ -798,11 +798,11 @@ class GRUCTCModule(pl.LightningModule):
 
     def __init__(
         self,
-        in_features: int,  # 528 = (n_fft // 2 + 1) * 16
-        hidden_size: int,  # 128
-        num_layers: int,  # 4
-        bidirectional: bool,  # True
-        dropout: float,  # 0.3
+        in_features: int,
+        hidden_size: int,
+        num_layers: int,
+        bidirectional: bool,
+        dropout: float,
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
@@ -812,24 +812,17 @@ class GRUCTCModule(pl.LightningModule):
 
         num_features = self.NUM_BANDS * self.ELECTRODE_CHANNELS
 
-        # Define the GRU encoder
-        self.encoder = nn.GRUEncoder(
-            input_size=in_features,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            batch_first=True,
-            bidirectional=bidirectional,
-            dropout=dropout,
-        )
-
-        num_directions = 2 if bidirectional else 1
-        self.fc = nn.Linear(hidden_size * num_directions, charset().num_classes)
-
-        # Model structure
+        # Model definition
         self.model = nn.Sequential(
             SpectrogramNorm(channels=num_features),
-            self.encoder,
-            self.fc,
+            GRUEncoder(
+                input_size=in_features,
+                hidden_size=hidden_size,
+                num_layers=num_layers,
+                bidirectional=bidirectional,
+                dropout=dropout,
+            ),
+            nn.Linear(hidden_size * (2 if bidirectional else 1), charset().num_classes),
             nn.LogSoftmax(dim=-1),
         )
 
@@ -847,9 +840,7 @@ class GRUCTCModule(pl.LightningModule):
         })
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        gru_out, _ = self.encoder(inputs)
-        x = self.fc(gru_out)
-        return x
+        return self.model(inputs)
 
     def _step(self, phase: str, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         inputs = batch["inputs"]
@@ -860,9 +851,8 @@ class GRUCTCModule(pl.LightningModule):
 
         emissions = self.forward(inputs)
 
-        # Compute output activation lengths
-        T_diff = inputs.shape[0] - emissions.shape[0]
-        emission_lengths = input_lengths - T_diff
+        # Compute adjusted sequence lengths
+        emission_lengths = input_lengths  # GRU maintains input length
 
         loss = self.ctc_loss(
             log_probs=emissions,
@@ -911,7 +901,7 @@ class GRUCTCModule(pl.LightningModule):
     def on_test_epoch_end(self) -> None:
         self._epoch_end("test")
 
-    def configure_optimizers(self) -> dict[str, any]:
+    def configure_optimizers(self) -> dict[str, Any]:
         return utils.instantiate_optimizer_and_scheduler(
             self.parameters(),
             optimizer_config=self.hparams.optimizer,

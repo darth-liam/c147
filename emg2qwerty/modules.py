@@ -586,9 +586,11 @@ class LSTMEncoder(nn.Module):
         x = self.out_layer(x)
 
         return x
+    
 
+    
 class GRUEncoder(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, output_size, bidirectional=True, dropout=0.3):
+    def __init__(self, input_size, hidden_size, num_layers, bidirectional=True, dropout=0.3):
         super(GRUEncoder, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -600,98 +602,19 @@ class GRUEncoder(nn.Module):
             num_layers=num_layers, 
             batch_first=True, 
             bidirectional=bidirectional,
-            dropout=dropout,
+            dropout=dropout if num_layers > 1 else 0.0,  # Avoid dropout if num_layers=1
         )
 
         num_directions = 2 if bidirectional else 1
-        self.fc = nn.Linear(hidden_size * num_directions, output_size)
-        self.layer_norm = nn.LayerNorm(input_size)
+        self.fc = nn.Linear(hidden_size * num_directions, hidden_size)  # Projection layer
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """
         inputs: (T, N, C)
-        outputs: (N, output_size) - Encodes sequence into a single vector
+        outputs: (T, N, hidden_size * num_directions)
         """
-        T_in, N, C = inputs.shape
-
-        # Pass through GRU
         gru_out, _ = self.gru(inputs)  # (T, N, hidden_size * num_directions)
-        x = self.layer_norm(gru_out + inputs)  # Residual connection
-
-        # Take the last time step
-        x = x[-1]  # Shape: (N, hidden_size * num_directions)
-
-        # Fully connected layer
-        x = self.fc(x)  # Shape: (N, output_size)
+        x = self.fc(gru_out)  # (T, N, hidden_size)
         return x
+
     
-class TransformerEncoder(nn.Module):
-    """A stack of Transformer blocks for sequence encoding."""
-    def __init__(
-        self,
-        num_features: int,
-        block_channels: Sequence[int] = (24, 24, 24, 24),
-        num_heads: int = 8,
-        feedforward_dim: int = 256,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
-        self.blocks = nn.ModuleList([
-            TransformerBlock(num_features, num_heads, feedforward_dim, dropout)
-            for _ in block_channels
-        ])
-        self.fc_block = TransformerFCBlock(num_features)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        x = inputs
-        for block in self.blocks:
-            x = block(x)
-        return self.fc_block(x)
-
-
-class HybridEncoder(nn.Module):
-    """A hybrid encoder combining TDSConv, GRU, and Transformer layers for keystroke prediction."""
-    def __init__(
-        self,
-        num_features: int,
-        tds_channels: int = 64,
-        tds_kernel_size: int = 3,
-        gru_hidden_size: int = 128,
-        num_gru_layers: int = 2,
-        transformer_heads: int = 8,
-        transformer_ff_dim: int = 512,
-        num_transformer_layers: int = 2,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
-
-        # TDSConv for initial feature extraction
-        self.tdsconv = TDSConv2dBlock(num_features, tds_channels, kernel_size=tds_kernel_size, dropout=dropout)
-
-        # GRU for sequence modeling
-        self.gru = GRUBlock(
-            input_size=tds_channels,
-            hidden_size=gru_hidden_size,
-            num_layers=num_gru_layers,
-            bidirectional=True,
-            dropout=dropout
-        )
-
-        # Transformer for capturing long-range dependencies
-        self.transformer = TransformerEncoder(
-            num_features=gru_hidden_size * 2,  # Bidirectional GRU output size
-            block_channels=[transformer_heads] * num_transformer_layers,
-            num_heads=transformer_heads,
-            feedforward_dim=transformer_ff_dim,
-            dropout=dropout
-        )
-
-        # Fully connected block for final feature refinement
-        self.fc_block = CNNFCBlock(num_features)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        x = self.tdsconv(inputs)  # (T, N, tds_channels)
-        x = self.gru(x)  # (T, N, gru_hidden_size * 2)
-        x = self.transformer(x)  # (T, N, gru_hidden_size * 2)
-        x = self.fc_block(x)  # (T, N, num_features)
-        return x
