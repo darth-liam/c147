@@ -1049,14 +1049,6 @@ class TransformerEncoderCTCModule(pl.LightningModule):
         )
 
 
-import pytorch_lightning as pl
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-from torchmetrics import MetricCollection
-from typing import Any, ClassVar, Dict, Sequence
-
 class HybridCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
