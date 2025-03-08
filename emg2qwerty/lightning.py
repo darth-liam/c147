@@ -789,47 +789,77 @@ class LSTMEncoderCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
     
+import torch
+import torch.nn as nn
+import pytorch_lightning as pl
+from typing import ClassVar, Sequence, Dict
+from omegaconf import DictConfig
+from torchmetrics import MetricCollection
+from hydra.utils import instantiate
+from emg2qwerty.utils import SpectrogramNorm, charset, LabelData, CharacterErrorRates
+from emg2qwerty.models import WindowedEMGDataModule
+
 
 class GRUCTCModule(pl.LightningModule):
+    """A GRU-based module for keystroke prediction from EMG spectrograms."""
+
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
 
     def __init__(
         self,
-        encoder: nn.Module,
-        optimizer: Dict,
-        lr_scheduler: Dict,
-        decoder: Dict,
+        in_features: int,  # 528 = (n_fft // 2 + 1) * 16
+        hidden_size: int,  # 128
+        num_layers: int,  # 4
+        bidirectional: bool,  # True
+        dropout: float,  # 0.3
+        optimizer: DictConfig,
+        lr_scheduler: DictConfig,
+        decoder: DictConfig,
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
 
         num_features = self.NUM_BANDS * self.ELECTRODE_CHANNELS
 
+        # Define the GRU encoder
+        self.encoder = nn.GRU(
+            input_size=in_features,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            bidirectional=bidirectional,
+            dropout=dropout,
+        )
+
+        num_directions = 2 if bidirectional else 1
+        self.fc = nn.Linear(hidden_size * num_directions, charset().num_classes)
+
+        # Model structure
         self.model = nn.Sequential(
             SpectrogramNorm(channels=num_features),
-            encoder,  # GRUEncoder
-            nn.Linear(encoder.output_size, charset().num_classes),
+            self.encoder,
+            self.fc,
             nn.LogSoftmax(dim=-1),
         )
 
-        # Criterion
-        self.ctc_loss = nn.CTCLoss(blank=charset().null_class, zero_infinity=True)
+        # Loss function
+        self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
 
         # Decoder
         self.decoder = instantiate(decoder)
 
         # Metrics
         metrics = MetricCollection([CharacterErrorRates()])
-        self.metrics = nn.ModuleDict(
-            {
-                f"{phase}_metrics": metrics.clone(prefix=f"{phase}/")
-                for phase in ["train", "val", "test"]
-            }
-        )
+        self.metrics = nn.ModuleDict({
+            f"{phase}_metrics": metrics.clone(prefix=f"{phase}/")
+            for phase in ["train", "val", "test"]
+        })
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.model(inputs)
+        gru_out, _ = self.encoder(inputs)
+        x = self.fc(gru_out)
+        return x
 
     def _step(self, phase: str, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         inputs = batch["inputs"]
@@ -845,10 +875,13 @@ class GRUCTCModule(pl.LightningModule):
         emission_lengths = input_lengths - T_diff
 
         loss = self.ctc_loss(
-            emissions, targets.transpose(0, 1), emission_lengths, target_lengths
+            log_probs=emissions,
+            targets=targets.transpose(0, 1),
+            input_lengths=emission_lengths,
+            target_lengths=target_lengths,
         )
 
-        # Decode predictions
+        # Decode emissions
         predictions = self.decoder.decode_batch(
             emissions=emissions.detach().cpu().numpy(),
             emission_lengths=emission_lengths.detach().cpu().numpy(),
@@ -888,7 +921,7 @@ class GRUCTCModule(pl.LightningModule):
     def on_test_epoch_end(self) -> None:
         self._epoch_end("test")
 
-    def configure_optimizers(self) -> dict[str, Any]:
+    def configure_optimizers(self) -> dict[str, any]:
         return utils.instantiate_optimizer_and_scheduler(
             self.parameters(),
             optimizer_config=self.hparams.optimizer,
