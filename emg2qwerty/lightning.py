@@ -1090,7 +1090,7 @@ class HybridCTCModule(pl.LightningModule):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.model(inputs)
 
-    def _step(self, phase: str, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def _step(self, phase: str, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         inputs = batch["inputs"]
         targets = batch["targets"]
         input_lengths = batch["input_lengths"]
