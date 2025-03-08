@@ -788,16 +788,6 @@ class LSTMEncoderCTCModule(pl.LightningModule):
             optimizer_config=self.hparams.optimizer,
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
-    
-import torch
-import torch.nn as nn
-import pytorch_lightning as pl
-from typing import ClassVar, Sequence, Dict
-from omegaconf import DictConfig
-from torchmetrics import MetricCollection
-from hydra.utils import instantiate
-from emg2qwerty.utils import SpectrogramNorm, charset, LabelData, CharacterErrorRates
-from emg2qwerty.models import WindowedEMGDataModule
 
 
 class GRUCTCModule(pl.LightningModule):
