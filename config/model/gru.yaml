@@ -1,6 +1,6 @@
 # @package _global_
 module:
-  _target_: emg2qwerty.lightning.GRUEncoderModule
+  _target_: emg2qwerty.lightning.GRUCTCModule
   in_features: 128  # Adjust based on the output size from previous layers (e.g., MLP or Conv2D layers)
   gru_hidden_size: 128  # Hidden size of the GRU layer
   num_gru_layers: 2  # Number of GRU layers
