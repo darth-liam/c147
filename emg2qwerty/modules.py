@@ -280,7 +280,6 @@ class TDSConvEncoder(nn.Module):
         return self.tds_conv_blocks(inputs)  # (T, N, num_features)
     
 
-
 class TDSLSTMEncoder(nn.Module):
 
     def __init__(
@@ -307,6 +306,7 @@ class TDSLSTMEncoder(nn.Module):
         x = self.out_layer(x)
 
         return x
+
 
 class SimpleCNN2dBlock(nn.Module):
     """A basic convolutional neural network for processing EMG spectrograms."""
@@ -383,64 +383,6 @@ class MultiLayerCNNBlock(nn.Module):
         return self.layer_norm(x)
     
 
-class GRUBlock(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, bidirectional=True, dropout=0.3):
-        super(GRUBlock, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.bidirectional = bidirectional
-
-        self.gru = nn.GRU(
-            input_size=input_size, 
-            hidden_size=hidden_size, 
-            num_layers=num_layers, 
-            batch_first=True, 
-            bidirectional=bidirectional,
-            dropout=dropout
-        )
-
-        num_directions = 2 if bidirectional else 1
-        self.fc = nn.Linear(hidden_size * num_directions, input_size) if hidden_size * num_directions != input_size else nn.Identity()
-        
-        self.layer_norm = nn.LayerNorm(input_size)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """
-        inputs: (T, N, C) - (Time, Batch, Channels)
-        outputs: (T, N, C) - same shape as inputs
-        """
-        T_in, N, C = inputs.shape
-        
-        # Pass through GRU
-        gru_out, _ = self.gru(inputs)  # Shape: (T, N, hidden_size * num_directions)
-        gru_out = self.fc(gru_out)  # Align dimensions if needed
-
-        # Residual connection and normalization
-        x = self.layer_norm(gru_out + inputs)
-        return x
-
-class TransformerBlock(nn.Module):
-    """A Transformer encoder block with multi-head self-attention and feed-forward layers."""
-    def __init__(self, embed_dim, num_heads, feedforward_dim, dropout=0.1):
-        super().__init__()
-        self.attention = nn.MultiheadAttention(embed_dim, num_heads, dropout=dropout, batch_first=True)
-        self.feed_forward = nn.Sequential(
-            nn.Linear(embed_dim, feedforward_dim),
-            nn.ReLU(),
-            nn.Linear(feedforward_dim, embed_dim),
-        )
-        self.norm1 = nn.LayerNorm(embed_dim)
-        self.norm2 = nn.LayerNorm(embed_dim)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        attn_output, _ = self.attention(inputs, inputs, inputs)
-        x = self.norm1(inputs + self.dropout(attn_output))
-        ff_output = self.feed_forward(x)
-        return self.norm2(x + self.dropout(ff_output))
-
-
-
 class CNNFCBlock(nn.Module):
     def __init__(self, num_features: int) -> None:
         super().__init__()
@@ -456,57 +398,6 @@ class CNNFCBlock(nn.Module):
         x = self.fc_block(x)
         x = x + inputs
         return self.layer_norm(x)
-
-
-class GRUFCBlock(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, output_size, bidirectional=True, dropout=0.3):
-        super(GRUFCBlock, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.bidirectional = bidirectional
-
-        self.gru = nn.GRU(
-            input_size=input_size, 
-            hidden_size=hidden_size, 
-            num_layers=num_layers, 
-            batch_first=True, 
-            bidirectional=bidirectional,
-            dropout=dropout
-        )
-
-        num_directions = 2 if bidirectional else 1
-        self.fc = nn.Linear(hidden_size * num_directions, output_size)
-        self.layer_norm = nn.LayerNorm(input_size)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """
-        inputs: (T, N, C)
-        outputs: (T, N, output_size)
-        """
-        T_in, N, C = inputs.shape
-
-        # Pass through GRU
-        gru_out, _ = self.gru(inputs)  # (T, N, hidden_size * num_directions)
-        x = self.layer_norm(gru_out + inputs)  # Residual connection
-        x = self.fc(x)  # Fully connected layer
-        return x
-
-
-class TransformerFCBlock(nn.Module):
-    """A fully connected block for feature refinement with residual connection and normalization."""
-    def __init__(self, num_features: int) -> None:
-        super().__init__()
-        self.fc_block = nn.Sequential(
-            nn.Linear(num_features, num_features),
-            nn.ReLU(),
-            nn.Linear(num_features, num_features),
-        )
-        self.layer_norm = nn.LayerNorm(num_features)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        x = inputs
-        x = self.fc_block(x)
-        return self.layer_norm(x + inputs)
 
 
 class SimpleCNNEncoder(nn.Module):
@@ -561,7 +452,8 @@ class MultiLayerCNNEncoder(nn.Module):
 
         def forward(self, inputs: torch.Tensor) -> torch.Tensor:
             return self.multi_layer_cnn_conv_blocks(inputs)  # (T, N, num_features)
-        
+
+
 class LSTMEncoder(nn.Module):
     def __init__(
         self,
@@ -586,31 +478,31 @@ class LSTMEncoder(nn.Module):
         x = self.out_layer(x)
 
         return x
-    
+
 
 class GRUEncoder(nn.Module):
+    """GRU-based encoder for EMG data, following the TDSLSTMEncoder structure."""
+    
     def __init__(
         self,
         num_features: int,
         gru_hidden_size: int = 128,
-        num_gru_layers: int = 2,
-        dropout: float = 0.3,
-    ):
+        num_gru_layers: int = 4,
+    ) -> None:
         super().__init__()
-        self.gru = nn.GRU(
-            input_size=num_features,  # The input features to the GRU (num_features)
-            hidden_size=gru_hidden_size,  # The hidden size
-            num_layers=num_gru_layers,  # Number of GRU layers
-            batch_first=False,  # Keeping batch first dimension false for time-first format
-            dropout=dropout if num_gru_layers > 1 else 0.0,
-            bidirectional=False,
-        )
-        self.output_layer = nn.Linear(gru_hidden_size, charset().num_classes)  # Mapping GRU output to classes
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # GRU expects input shape (T, N, input_size)
-        gru_output, _ = self.gru(x)  # Output shape: (T, N, hidden_size)
-        
-        # Pass the GRU output through a linear layer to map to class logits
-        output = self.output_layer(gru_output)  # (T, N, num_classes)
-        return output
+        self.gru_layers = nn.GRU(
+            input_size=num_features,
+            hidden_size=gru_hidden_size,
+            num_layers=num_gru_layers,
+            batch_first=False,
+            bidirectional=True,
+        )
+        self.fc_block = CNNFCBlock(gru_hidden_size * 2)  # Reusing FC block from CNN
+        self.out_layer = nn.Linear(gru_hidden_size * 2, num_features)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        x, _ = self.gru_layers(inputs)
+        x = self.fc_block(x)
+        x = self.out_layer(x)
+        return x

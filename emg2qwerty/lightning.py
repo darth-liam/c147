@@ -141,7 +141,6 @@ class WindowedEMGDataModule(pl.LightningDataModule):
             persistent_workers=True,
         )
 
-
 class TDSConvCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
@@ -275,7 +274,6 @@ class TDSConvCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
 
-
 class TDSLSTMCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
@@ -405,8 +403,6 @@ class TDSLSTMCTCModule(pl.LightningModule):
             optimizer_config=self.hparams.optimizer,
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
-
-
 
 class SimpleCNNCTCModule(pl.LightningModule):
     """A CNN-based module for keystroke prediction from EMG spectrograms."""
@@ -805,8 +801,6 @@ class GRUCTCModule(pl.LightningModule):
         self.save_hyperparameters()
 
         num_features = self.NUM_BANDS * mlp_features[-1]
-
-        # Model
         self.model = nn.Sequential(
             # (T, N, bands=2, C=16, freq)
             SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
@@ -820,8 +814,8 @@ class GRUCTCModule(pl.LightningModule):
             nn.Flatten(start_dim=2),
             GRUEncoder(
                 num_features=num_features,
-                gru_hidden_size=128,  # You can change this
-                num_gru_layers=2,  # Adjust layers based on your needs
+                gru_hidden_size=128,
+                num_gru_layers=4,
             ),
             # (T, N, num_classes)
             nn.Linear(num_features, charset().num_classes),
@@ -846,9 +840,7 @@ class GRUCTCModule(pl.LightningModule):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.model(inputs)
 
-    def _step(
-        self, phase: str, batch: dict[str, torch.Tensor], *args, **kwargs
-    ) -> torch.Tensor:
+    def _step(self, phase: str, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         inputs = batch["inputs"]
         targets = batch["targets"]
         input_lengths = batch["input_lengths"]
@@ -857,16 +849,15 @@ class GRUCTCModule(pl.LightningModule):
 
         emissions = self.forward(inputs)
 
-        # Shrink input lengths by an amount equivalent to the conv encoder's
-        # temporal receptive field to compute output activation lengths for CTCLoss.
+        # Adjust input lengths
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
         loss = self.ctc_loss(
-            log_probs=emissions,  # (T, N, num_classes)
-            targets=targets.transpose(0, 1),  # (T, N) -> (N, T)
-            input_lengths=emission_lengths,  # (N,)
-            target_lengths=target_lengths,  # (N,)
+            log_probs=emissions,
+            targets=targets.transpose(0, 1),
+            input_lengths=emission_lengths,
+            target_lengths=target_lengths,
         )
 
         # Decode emissions
@@ -891,14 +882,14 @@ class GRUCTCModule(pl.LightningModule):
         self.log_dict(metrics.compute(), sync_dist=True)
         metrics.reset()
 
-    def training_step(self, *args, **kwargs) -> torch.Tensor:
-        return self._step("train", *args, **kwargs)
+    def training_step(self, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
+        return self._step("train", batch)
 
-    def validation_step(self, *args, **kwargs) -> torch.Tensor:
-        return self._step("val", *args, **kwargs)
+    def validation_step(self, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
+        return self._step("val", batch)
 
-    def test_step(self, *args, **kwargs) -> torch.Tensor:
-        return self._step("test", *args, **kwargs)
+    def test_step(self, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
+        return self._step("test", batch)
 
     def on_train_epoch_end(self) -> None:
         self._epoch_end("train")

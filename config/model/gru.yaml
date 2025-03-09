@@ -1,10 +1,18 @@
 # @package _global_
+
 module:
   _target_: emg2qwerty.lightning.GRUCTCModule
-  in_features: 128
-  dropout: 0.3
-  output_classes: 10
-
+  in_features: 528  # freq * channels = (n_fft // 2 + 1) * 16
+  mlp_features: [384]
+  block_channels: [24, 24, 24, 24]
+  kernel_width: 32  # Total temporal receptive field of 125 samples given 4 layers
+  encoder:
+    _target_: emg2qwerty.models.GRUEncoder
+    num_features: 528
+    gru_hidden_size: 128
+    num_gru_layers: 4
+    bidirectional: true
+    dropout: 0.3
 
 datamodule:
   _target_: emg2qwerty.lightning.WindowedEMGDataModule
