@@ -354,7 +354,7 @@ class CropTDSCTCModule(pl.LightningModule):
 
         # Adjust input lengths after cropping
         T_diff = inputs.shape[0] - emissions.shape[0]
-        emission_lengths = input_lengths - T_diff
+        emission_lengths = torch.clip(input_lengths - T_diff, min=0)  # Corrected length adjustment
 
         loss = self.ctc_loss(
             log_probs=emissions,
@@ -377,6 +377,7 @@ class CropTDSCTCModule(pl.LightningModule):
 
         self.log(f"{phase}/loss", loss, batch_size=N, sync_dist=True)
         return loss
+
 
     def _epoch_end(self, phase: str) -> None:
         metrics = self.metrics[f"{phase}_metrics"]
