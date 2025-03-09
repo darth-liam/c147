@@ -243,3 +243,24 @@ class SpecAugment:
 
         # (..., C, freq, T) -> (T, ..., C, freq)
         return x.movedim(-1, 0)
+
+@dataclass
+class RandomCrop:
+    """Applies a random crop to the temporal dimension of the input signal.
+    
+    Args:
+        crop_size (int): The number of time steps to retain after cropping.
+        time_dim (int): The temporal dimension to crop along. Default is 0.
+    """
+
+    crop_size: int
+    time_dim: int = 0
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        time_steps = tensor.shape[self.time_dim]
+
+        if time_steps <= self.crop_size:
+            return tensor  # Return original if crop size is larger than data
+
+        start = np.random.randint(0, time_steps - self.crop_size + 1)
+        return tensor.narrow(self.time_dim, start, self.crop_size)

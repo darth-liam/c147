@@ -25,6 +25,10 @@ specaug:
   n_freq_masks: 2
   freq_mask_param: 4
 
+random_crop:
+  _target_: emg2qwerty.transforms.RandomCrop
+  crop_size: 100  # Adjust this based on your data size and needs
+
 transforms:
   train:
     - ${to_tensor}
@@ -32,6 +36,7 @@ transforms:
     - ${temporal_jitter}
     - ${logspec}
     - ${specaug}
+    - ${random_crop}  # Added Random Crop here
 
   val:
     - ${to_tensor}
