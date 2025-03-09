@@ -274,6 +274,8 @@ class TDSConvCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
 
+
+
 class CropTDSCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
@@ -287,16 +289,15 @@ class CropTDSCTCModule(pl.LightningModule):
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
-        crop_size: int = None,  # New parameter for cropping
+        crop_size: int,  # New parameter for cropping
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
 
-        self.crop_size = crop_size  # Store cropping size
-
         num_features = self.NUM_BANDS * mlp_features[-1]
+        self.crop_size = crop_size
 
-        # Model pipeline
+        # Model
         self.model = nn.Sequential(
             SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
             MultiBandRotationInvariantMLP(
@@ -314,13 +315,13 @@ class CropTDSCTCModule(pl.LightningModule):
             nn.LogSoftmax(dim=-1),
         )
 
-        # CTC Loss function
+        # Criterion
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
 
         # Decoder
         self.decoder = instantiate(decoder)
 
-        # Metrics setup
+        # Metrics
         metrics = MetricCollection([CharacterErrorRates()])
         self.metrics = nn.ModuleDict(
             {
@@ -329,26 +330,29 @@ class CropTDSCTCModule(pl.LightningModule):
             }
         )
 
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        return self.model(inputs)
+
     def _crop_inputs(self, inputs: torch.Tensor) -> torch.Tensor:
-        """Crop the input tensor along the temporal dimension if needed."""
-        if self.crop_size and inputs.shape[0] > self.crop_size:
-            start_idx = torch.randint(0, inputs.shape[0] - self.crop_size + 1, (1,)).item()
-            return inputs[start_idx : start_idx + self.crop_size]
+        """ Crop the input tensor along the temporal dimension. """
+        T, N, *rest = inputs.shape
+        if T > self.crop_size:
+            start = torch.randint(0, T - self.crop_size + 1, (1,)).item()
+            inputs = inputs[start : start + self.crop_size]
         return inputs
 
-    def _step(self, phase: str, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
-        inputs = batch["inputs"]
+    def _step(
+        self, phase: str, batch: dict[str, torch.Tensor], *args, **kwargs
+    ) -> torch.Tensor:
+        inputs = self._crop_inputs(batch["inputs"])  # Apply cropping
         targets = batch["targets"]
         input_lengths = batch["input_lengths"]
         target_lengths = batch["target_lengths"]
-        N = len(input_lengths)  # batch_size
-
-        # Apply cropping
-        inputs = self._crop_inputs(inputs)
+        N = len(input_lengths)
 
         emissions = self.forward(inputs)
 
-        # Adjust lengths after cropping
+        # Adjust input lengths after cropping
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
@@ -359,13 +363,11 @@ class CropTDSCTCModule(pl.LightningModule):
             target_lengths=target_lengths,
         )
 
-        # Decode emissions
         predictions = self.decoder.decode_batch(
             emissions=emissions.detach().cpu().numpy(),
             emission_lengths=emission_lengths.detach().cpu().numpy(),
         )
 
-        # Update metrics
         metrics = self.metrics[f"{phase}_metrics"]
         targets = targets.detach().cpu().numpy()
         target_lengths = target_lengths.detach().cpu().numpy()
@@ -375,6 +377,37 @@ class CropTDSCTCModule(pl.LightningModule):
 
         self.log(f"{phase}/loss", loss, batch_size=N, sync_dist=True)
         return loss
+
+    def _epoch_end(self, phase: str) -> None:
+        metrics = self.metrics[f"{phase}_metrics"]
+        self.log_dict(metrics.compute(), sync_dist=True)
+        metrics.reset()
+
+    def training_step(self, *args, **kwargs) -> torch.Tensor:
+        return self._step("train", *args, **kwargs)
+
+    def validation_step(self, *args, **kwargs) -> torch.Tensor:
+        return self._step("val", *args, **kwargs)
+
+    def test_step(self, *args, **kwargs) -> torch.Tensor:
+        return self._step("test", *args, **kwargs)
+
+    def on_train_epoch_end(self) -> None:
+        self._epoch_end("train")
+
+    def on_validation_epoch_end(self) -> None:
+        self._epoch_end("val")
+
+    def on_test_epoch_end(self) -> None:
+        self._epoch_end("test")
+
+    def configure_optimizers(self) -> dict[str, Any]:
+        return utils.instantiate_optimizer_and_scheduler(
+            self.parameters(),
+            optimizer_config=self.hparams.optimizer,
+            lr_scheduler_config=self.hparams.lr_scheduler,
+        )
+
 
 
 class TDSLSTMCTCModule(pl.LightningModule):
