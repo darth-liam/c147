@@ -511,8 +511,6 @@ class WindowedEMGDataset(torch.utils.data.Dataset):
         return emg, labels
 
 
-   
-    
 @dataclass
 class CroppedEMGDataset(torch.utils.data.Dataset):
     """A `torch.utils.data.Dataset` corresponding to an instance of `EMGSessionData`

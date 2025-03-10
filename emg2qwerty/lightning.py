@@ -554,6 +554,12 @@ class TDSLSTMCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
 
+
+
+
+
+
+
 class SimpleCNNCTCModule(pl.LightningModule):
     """A CNN-based module for keystroke prediction from EMG spectrograms."""
 
