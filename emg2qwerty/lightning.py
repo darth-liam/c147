@@ -275,7 +275,6 @@ class TDSConvCTCModule(pl.LightningModule):
         )
 
 
-
 class CropTDSCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
@@ -319,7 +318,7 @@ class CropTDSCTCModule(pl.LightningModule):
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
 
         # Decoder
-        self.decoder = instantiate(decoder)
+        self.decoder = utils.instantiate(decoder)
 
         # Metrics
         metrics = MetricCollection([CharacterErrorRates()])
@@ -331,19 +330,28 @@ class CropTDSCTCModule(pl.LightningModule):
         )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        print(f"[DEBUG] Forward pass input shape: {inputs.shape}")
         return self.model(inputs)
 
     def _crop_inputs(self, inputs: torch.Tensor) -> torch.Tensor:
-        """ Crop the input tensor along the temporal dimension. """
+        """ Crop the input tensor along the temporal dimension while maintaining minimum constraints. """
         T, N, *rest = inputs.shape
-        if T > self.crop_size:
-            start = torch.randint(0, T - self.crop_size + 1, (1,)).item()
-            inputs = inputs[start : start + self.crop_size]
+        min_crop_size = max(32, self.hparams.kernel_width)  # Ensure kernel fits
+
+        crop_size = max(self.crop_size, min_crop_size)
+
+        if T > crop_size:
+            start = torch.randint(0, T - crop_size + 1, (1,)).item()
+            inputs = inputs[start : start + crop_size]
+
+        print(f"[DEBUG] Cropped input shape: {inputs.shape}")  # Debugging cropped input
         return inputs
 
     def _step(
         self, phase: str, batch: dict[str, torch.Tensor], *args, **kwargs
     ) -> torch.Tensor:
+        print(f"[DEBUG] Raw batch input shape: {batch['inputs'].shape}")
+
         inputs = self._crop_inputs(batch["inputs"])  # Apply cropping
         targets = batch["targets"]
         input_lengths = batch["input_lengths"]
@@ -351,15 +359,14 @@ class CropTDSCTCModule(pl.LightningModule):
         N = len(input_lengths)
 
         emissions = self.forward(inputs)
+        print(f"[DEBUG] Emissions shape: {emissions.shape}")  # Track emissions shape
 
-        # Ensure emission_lengths do not exceed actual emissions.shape[0]
-        emission_lengths = torch.clamp(input_lengths, max=emissions.shape[0])
+        # Ensure emission_lengths do not exceed emissions.shape[0]
+        T_diff = batch["inputs"].shape[0] - emissions.shape[0]
+        emission_lengths = torch.clamp(input_lengths - T_diff, min=1, max=emissions.shape[0])
 
-        # Debugging info
-        print(f"Original input_lengths: {input_lengths}")
-        print(f"Emissions shape: {emissions.shape}")  # [Time, Batch, Classes]
-        print(f"Adjusted emission_lengths: {emission_lengths}")
-        print(f"Target lengths: {target_lengths}")
+        print(f"[DEBUG] Adjusted emission_lengths: {emission_lengths}")
+        print(f"[DEBUG] Target lengths: {target_lengths}")
 
         loss = self.ctc_loss(
             log_probs=emissions,
@@ -382,8 +389,6 @@ class CropTDSCTCModule(pl.LightningModule):
 
         self.log(f"{phase}/loss", loss, batch_size=N, sync_dist=True)
         return loss
-
-
 
     def _epoch_end(self, phase: str) -> None:
         metrics = self.metrics[f"{phase}_metrics"]
@@ -414,7 +419,6 @@ class CropTDSCTCModule(pl.LightningModule):
             optimizer_config=self.hparams.optimizer,
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
-
 
 
 class TDSLSTMCTCModule(pl.LightningModule):
