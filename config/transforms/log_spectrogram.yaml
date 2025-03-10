@@ -26,10 +26,10 @@ specaug:
   freq_mask_param: 4
 
 
-#random_crop:
-  #_target_: emg2qwerty.transforms.RandomCrop
-  #min_crop_size: 100
-  #max_crop_size: 128
+random_crop:
+  _target_: emg2qwerty.transforms.RandomCrop
+  min_crop_size: 100
+  max_crop_size: 128
 
 transforms:
   train:
@@ -38,7 +38,7 @@ transforms:
     - ${temporal_jitter}
     - ${logspec}
     - ${specaug}
-    #- ${random_crop} 
+    - ${random_crop} 
 
   val:
     - ${to_tensor}
