@@ -274,5 +274,7 @@ class RandomCrop:
         max_start = max(0, original_length - crop_size)
         start_idx = np.random.randint(0, max_start + 1) if max_start > 0 else 0
 
+        print("ran random crop")
+
         # Apply cropping along the specified time dimension
         return tensor.narrow(self.time_dim, start_idx, crop_size)
