@@ -246,21 +246,20 @@ class SpecAugment:
 
 @dataclass
 class RandomCrop:
-    """Applies a random crop to the temporal dimension of the input signal.
-    
+    """Applies random cropping with a variable crop size.
+
     Args:
-        crop_size (int): The number of time steps to retain after cropping.
-        time_dim (int): The temporal dimension to crop along. Default is 0.
+        min_crop_size (int): Minimum crop size.
+        max_crop_size (int): Maximum crop size.
+        crop_dim (int): Dimension along which to apply cropping (default: 0 for temporal cropping).
     """
 
-    crop_size: int
-    time_dim: int = 0
+    min_crop_size: int
+    max_crop_size: int
+    crop_dim: int = 0
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        time_steps = tensor.shape[self.time_dim]
-
-        if time_steps <= self.crop_size:
-            return tensor  # Return original if crop size is larger than data
-
-        start = np.random.randint(0, time_steps - self.crop_size + 1)
-        return tensor.narrow(self.time_dim, start, self.crop_size)
+        crop_size = np.random.randint(self.min_crop_size, self.max_crop_size + 1)
+        max_start = tensor.shape[self.crop_dim] - crop_size
+        start_idx = np.random.randint(0, max_start + 1) if max_start > 0 else 0
+        return tensor.narrow(self.crop_dim, start_idx, crop_size)

@@ -18,7 +18,8 @@ import torch
 from torch import nn
 
 from emg2qwerty.charset import CharacterSet, charset
-from emg2qwerty.transforms import ToTensor, Transform
+from emg2qwerty.transforms import ToTensor, Transform, RandomCrop
+
 
 
 @dataclass
@@ -508,6 +509,85 @@ class WindowedEMGDataset(torch.utils.data.Dataset):
         labels = torch.as_tensor(label_data.labels)
 
         return emg, labels
+
+
+   
+    
+@dataclass
+class CroppedEMGDataset(torch.utils.data.Dataset):
+    """A `torch.utils.data.Dataset` corresponding to an instance of `EMGSessionData`
+    that iterates over EMG windows of configurable length and stride.
+    """
+
+    hdf5_path: Path
+    window_length: InitVar[int | None] = None
+    stride: InitVar[int | None] = None
+    padding: InitVar[tuple[int, int]] = (0, 0)
+    jitter: bool = False
+    transform: Transform[np.ndarray, torch.Tensor] = field(default_factory=ToTensor)
+
+    def __post_init__(
+        self,
+        window_length: int | None,
+        stride: int | None,
+        padding: tuple[int, int],
+    ) -> None:
+        with EMGSessionData(self.hdf5_path) as session:
+            assert (
+                session.condition == "on_keyboard"
+            ), f"Unsupported condition {self.session.condition}"
+            self.session_length = len(session)
+
+        self.window_length = (
+            window_length if window_length is not None else self.session_length
+        )
+        self.stride = stride if stride is not None else self.window_length
+        assert self.window_length > 0 and self.stride > 0
+
+        (self.left_padding, self.right_padding) = padding
+        assert self.left_padding >= 0 and self.right_padding >= 0
+
+        # Define random cropping augmentation
+        self.random_crop = RandomCrop(min_crop_size=80, max_crop_size=120)
+
+    def __len__(self) -> int:
+        return int(max(self.session_length - self.window_length, 0) // self.stride + 1)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        # Lazy init `EMGSessionData` per dataloading worker
+        if not hasattr(self, "session"):
+            self.session = EMGSessionData(self.hdf5_path)
+
+        offset = idx * self.stride
+
+        # Randomly jitter the window offset.
+        leftover = len(self.session) - (offset + self.window_length)
+        if leftover < 0:
+            raise IndexError(f"Index {idx} out of bounds")
+        if leftover > 0 and self.jitter:
+            offset += np.random.randint(0, min(self.stride, leftover))
+
+        # Expand window to include contextual padding and fetch.
+        window_start = max(offset - self.left_padding, 0)
+        window_end = offset + self.window_length + self.right_padding
+        window = self.session[window_start:window_end]
+
+        # Extract EMG tensor corresponding to the window.
+        emg = self.transform(window)
+        assert torch.is_tensor(emg)
+
+        # Apply random cropping
+        emg = self.random_crop(emg)
+
+        # Extract labels corresponding to the original (un-padded) window.
+        timestamps = window[EMGSessionData.TIMESTAMPS]
+        start_t = timestamps[offset - window_start]
+        end_t = timestamps[(offset + self.window_length - 1) - window_start]
+        label_data = self.session.ground_truth(start_t, end_t)
+        labels = torch.as_tensor(label_data.labels)
+
+        return emg, labels
+
 
     @staticmethod
     def collate(
