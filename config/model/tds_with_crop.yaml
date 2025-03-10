@@ -4,11 +4,23 @@ module:
   in_features: 528
   mlp_features: [384]
   block_channels: [24, 24, 24, 24]
-  kernel_width: 32  #
+  kernel_width: 32  
 
 
 datamodule:
-  _target_: emg2qwerty.lightning.CroppedEMGDataset
-  window_length: 8000  # 4 sec windows for 2kHz EMG
-  padding: [1800, 200]  # 900ms past context, 100ms future context
+  _target_: emg2qwerty.lightning.CroppedEMGDataModule
+  window_length: 8000
+  padding: [1800, 200]
+  batch_size: 32
+  num_workers: 4
+  train_sessions: ${paths.train_data}
+  val_sessions: ${paths.val_data}
+  test_sessions: ${paths.test_data}
 
+  train_transform:
+    _target_: emg2qwerty.transforms.Compose
+    transforms:
+      - _target_: emg2qwerty.transforms.RandomCrop  
+        min_crop_size: 100
+        max_crop_size: 128
+      - _target_: emg2qwerty.transforms.ToTensor
