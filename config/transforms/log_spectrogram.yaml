@@ -37,7 +37,7 @@ transforms:
     - ${temporal_jitter}
     - ${logspec}
     - ${specaug}
-    - ${random_crop}  # Added Random Crop here
+    #- ${random_crop} 
 
   val:
     - ${to_tensor}

@@ -510,112 +510,35 @@ class WindowedEMGDataset(torch.utils.data.Dataset):
 
         return emg, labels
 
+@staticmethod
+def collate(
+    samples: Sequence[tuple[torch.Tensor, torch.Tensor]]
+) -> dict[str, torch.Tensor]:
+    """Collates a list of samples into a padded batch of inputs and targets.
+    Each input sample in the list should be a tuple of (input, target) tensors.
+    Also returns the lengths of unpadded inputs and targets for use in loss
+    functions such as CTC or RNN-T.
 
-@dataclass
-class CroppedEMGDataset(torch.utils.data.Dataset):
-    """A `torch.utils.data.Dataset` corresponding to an instance of `EMGSessionData`
-    that iterates over EMG windows of configurable length and stride.
+    Follows time-first format. That is, the retured batch is of shape (T, N, ...).
     """
+    inputs = [sample[0] for sample in samples]  # [(T, ...)]
+    targets = [sample[1] for sample in samples]  # [(T,)]
 
-    hdf5_path: Path
-    window_length: InitVar[int | None] = None
-    stride: InitVar[int | None] = None
-    padding: InitVar[tuple[int, int]] = (0, 0)
-    jitter: bool = False
-    transform: Transform[np.ndarray, torch.Tensor] = field(default_factory=ToTensor)
+    # Batch of inputs and targets padded along time
+    input_batch = nn.utils.rnn.pad_sequence(inputs)  # (T, N, ...)
+    target_batch = nn.utils.rnn.pad_sequence(targets)  # (T, N)
 
-    def __post_init__(
-        self,
-        window_length: int | None,
-        stride: int | None,
-        padding: tuple[int, int],
-    ) -> None:
-        with EMGSessionData(self.hdf5_path) as session:
-            assert (
-                session.condition == "on_keyboard"
-            ), f"Unsupported condition {self.session.condition}"
-            self.session_length = len(session)
+    # Lengths of unpadded input and target sequences for each batch entry
+    input_lengths = torch.as_tensor(
+        [len(_input) for _input in inputs], dtype=torch.int32
+    )
+    target_lengths = torch.as_tensor(
+        [len(target) for target in targets], dtype=torch.int32
+    )
 
-        self.window_length = (
-            window_length if window_length is not None else self.session_length
-        )
-        self.stride = stride if stride is not None else self.window_length
-        assert self.window_length > 0 and self.stride > 0
-
-        (self.left_padding, self.right_padding) = padding
-        assert self.left_padding >= 0 and self.right_padding >= 0
-
-        # Define random cropping augmentation
-        self.random_crop = RandomCrop(min_crop_size=80, max_crop_size=120)
-
-    def __len__(self) -> int:
-        return int(max(self.session_length - self.window_length, 0) // self.stride + 1)
-
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        # Lazy init `EMGSessionData` per dataloading worker
-        if not hasattr(self, "session"):
-            self.session = EMGSessionData(self.hdf5_path)
-
-        offset = idx * self.stride
-
-        # Randomly jitter the window offset.
-        leftover = len(self.session) - (offset + self.window_length)
-        if leftover < 0:
-            raise IndexError(f"Index {idx} out of bounds")
-        if leftover > 0 and self.jitter:
-            offset += np.random.randint(0, min(self.stride, leftover))
-
-        # Expand window to include contextual padding and fetch.
-        window_start = max(offset - self.left_padding, 0)
-        window_end = offset + self.window_length + self.right_padding
-        window = self.session[window_start:window_end]
-
-        # Extract EMG tensor corresponding to the window.
-        emg = self.transform(window)
-        assert torch.is_tensor(emg)
-
-        # Apply random cropping
-        emg = self.random_crop(emg)
-
-        # Extract labels corresponding to the original (un-padded) window.
-        timestamps = window[EMGSessionData.TIMESTAMPS]
-        start_t = timestamps[offset - window_start]
-        end_t = timestamps[(offset + self.window_length - 1) - window_start]
-        label_data = self.session.ground_truth(start_t, end_t)
-        labels = torch.as_tensor(label_data.labels)
-
-        return emg, labels
-
-
-    @staticmethod
-    def collate(
-        samples: Sequence[tuple[torch.Tensor, torch.Tensor]]
-    ) -> dict[str, torch.Tensor]:
-        """Collates a list of samples into a padded batch of inputs and targets.
-        Each input sample in the list should be a tuple of (input, target) tensors.
-        Also returns the lengths of unpadded inputs and targets for use in loss
-        functions such as CTC or RNN-T.
-
-        Follows time-first format. That is, the retured batch is of shape (T, N, ...).
-        """
-        inputs = [sample[0] for sample in samples]  # [(T, ...)]
-        targets = [sample[1] for sample in samples]  # [(T,)]
-
-        # Batch of inputs and targets padded along time
-        input_batch = nn.utils.rnn.pad_sequence(inputs)  # (T, N, ...)
-        target_batch = nn.utils.rnn.pad_sequence(targets)  # (T, N)
-
-        # Lengths of unpadded input and target sequences for each batch entry
-        input_lengths = torch.as_tensor(
-            [len(_input) for _input in inputs], dtype=torch.int32
-        )
-        target_lengths = torch.as_tensor(
-            [len(target) for target in targets], dtype=torch.int32
-        )
-
-        return {
-            "inputs": input_batch,
-            "targets": target_batch,
-            "input_lengths": input_lengths,
-            "target_lengths": target_lengths,
-        }
+    return {
+        "inputs": input_batch,
+        "targets": target_batch,
+        "input_lengths": input_lengths,
+        "target_lengths": target_lengths,
+    }
