@@ -245,16 +245,16 @@ class SpecAugment:
         return x.movedim(-1, 0)
 
 
-
+"""
 @dataclass
 class RandomCrop:
-    """Applies random cropping along the time dimension.
+    """"""Applies random cropping along the time dimension.
 
     Args:
         min_crop_size (int): Minimum crop size.
         max_crop_size (int): Maximum crop size.
         time_dim (int): The time dimension index. (default: 0)
-    """
+    """"""
 
     min_crop_size: int
     max_crop_size: int
@@ -276,3 +276,4 @@ class RandomCrop:
 
         # Apply cropping along the specified time dimension
         return tensor.narrow(self.time_dim, start_idx, crop_size)
+"""
