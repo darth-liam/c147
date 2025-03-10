@@ -68,7 +68,7 @@ class WindowedEMGDataModule(pl.LightningDataModule):
     def setup(self, stage: str | None = None) -> None:
         self.train_dataset = ConcatDataset(
             [
-                CroppedEMGDataset(
+                WindowedEMGDataset(
                     hdf5_path,
                     transform=self.train_transform,
                     window_length=self.window_length,
