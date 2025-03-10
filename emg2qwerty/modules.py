@@ -192,6 +192,7 @@ class TDSConv2dBlock(nn.Module):
             in_channels=channels,
             out_channels=channels,
             kernel_size=(1, kernel_width),
+            padding=(0, 6),
         )
         self.relu = nn.ReLU()
         self.layer_norm = nn.LayerNorm(channels * width)
