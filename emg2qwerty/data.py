@@ -510,35 +510,35 @@ class WindowedEMGDataset(torch.utils.data.Dataset):
 
         return emg, labels
 
-@staticmethod
-def collate(
-    samples: Sequence[tuple[torch.Tensor, torch.Tensor]]
-) -> dict[str, torch.Tensor]:
-    """Collates a list of samples into a padded batch of inputs and targets.
-    Each input sample in the list should be a tuple of (input, target) tensors.
-    Also returns the lengths of unpadded inputs and targets for use in loss
-    functions such as CTC or RNN-T.
+    @staticmethod
+    def collate(
+        samples: Sequence[tuple[torch.Tensor, torch.Tensor]]
+    ) -> dict[str, torch.Tensor]:
+        """Collates a list of samples into a padded batch of inputs and targets.
+        Each input sample in the list should be a tuple of (input, target) tensors.
+        Also returns the lengths of unpadded inputs and targets for use in loss
+        functions such as CTC or RNN-T.
 
-    Follows time-first format. That is, the retured batch is of shape (T, N, ...).
-    """
-    inputs = [sample[0] for sample in samples]  # [(T, ...)]
-    targets = [sample[1] for sample in samples]  # [(T,)]
+        Follows time-first format. That is, the retured batch is of shape (T, N, ...).
+        """
+        inputs = [sample[0] for sample in samples]  # [(T, ...)]
+        targets = [sample[1] for sample in samples]  # [(T,)]
 
-    # Batch of inputs and targets padded along time
-    input_batch = nn.utils.rnn.pad_sequence(inputs)  # (T, N, ...)
-    target_batch = nn.utils.rnn.pad_sequence(targets)  # (T, N)
+        # Batch of inputs and targets padded along time
+        input_batch = nn.utils.rnn.pad_sequence(inputs)  # (T, N, ...)
+        target_batch = nn.utils.rnn.pad_sequence(targets)  # (T, N)
 
-    # Lengths of unpadded input and target sequences for each batch entry
-    input_lengths = torch.as_tensor(
-        [len(_input) for _input in inputs], dtype=torch.int32
-    )
-    target_lengths = torch.as_tensor(
-        [len(target) for target in targets], dtype=torch.int32
-    )
+        # Lengths of unpadded input and target sequences for each batch entry
+        input_lengths = torch.as_tensor(
+            [len(_input) for _input in inputs], dtype=torch.int32
+        )
+        target_lengths = torch.as_tensor(
+            [len(target) for target in targets], dtype=torch.int32
+        )
 
-    return {
-        "inputs": input_batch,
-        "targets": target_batch,
-        "input_lengths": input_lengths,
-        "target_lengths": target_lengths,
-    }
+        return {
+            "inputs": input_batch,
+            "targets": target_batch,
+            "input_lengths": input_lengths,
+            "target_lengths": target_lengths,
+        }
