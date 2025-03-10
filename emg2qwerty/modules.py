@@ -201,6 +201,7 @@ class TDSConv2dBlock(nn.Module):
 
         # TNC -> NCT -> NcwT
         x = inputs.movedim(0, -1).reshape(N, self.channels, self.width, T_in)
+        print(f"Input shape to conv2d: {x.shape}")
         x = self.conv2d(x)
         x = self.relu(x)
         x = x.reshape(N, C, -1).movedim(-1, 0)  # NcwT -> NCT -> TNC
