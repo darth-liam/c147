@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 from emg2qwerty.charset import CharacterSet, charset
-from emg2qwerty.transforms import ToTensor, Transform, RandomCrop
+from emg2qwerty.transforms import ToTensor, Transform
 
 
 

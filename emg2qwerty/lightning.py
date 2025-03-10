@@ -19,7 +19,7 @@ from torchmetrics import MetricCollection
 
 from emg2qwerty import utils
 from emg2qwerty.charset import charset
-from emg2qwerty.data import LabelData, WindowedEMGDataset, CroppedEMGDataset
+from emg2qwerty.data import LabelData, WindowedEMGDataset
 from emg2qwerty.metrics import CharacterErrorRates
 from emg2qwerty.modules import (
     MultiBandRotationInvariantMLP,
