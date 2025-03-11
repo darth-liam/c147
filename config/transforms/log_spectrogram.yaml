@@ -28,8 +28,8 @@ specaug:
 
 random_crop:
   _target_: emg2qwerty.transforms.RandomCrop
-  min_crop_size: 100
-  max_crop_size: 128
+  min_crop_size: 10
+  max_crop_size: 40
 
 
 random_masking:

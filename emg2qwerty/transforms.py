@@ -147,7 +147,6 @@ class TemporalAlignmentJitter:
         assert self.max_offset >= 0
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        debug_shape("After TemporalJitter", tensor)
         assert tensor.shape[self.stack_dim] == 2
         left, right = tensor.unbind(self.stack_dim)
 
