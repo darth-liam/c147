@@ -251,8 +251,6 @@ class SpecAugment:
         return x.movedim(-1, 0)
 
 
-
-
 @dataclass
 class RandomCrop:
     min_crop_size: int
@@ -269,15 +267,17 @@ class RandomCrop:
             raise ValueError(f"Expected at least 3D input (T, B, C) or (T, N, B, C), got {tensor.shape}")
 
         T = tensor.shape[0]
-        crop_size = np.random.randint(max(self.min_crop_size, self.n_fft), self.max_crop_size + 1)
+        min_valid_crop = max(self.min_crop_size, self.n_fft)
 
-        if T <= crop_size:
-            return tensor  # Skip cropping if T is already too small
+        if T < min_valid_crop:
+            return tensor  # Skip cropping if T is too small
 
+        crop_size = np.random.randint(min_valid_crop, min(self.max_crop_size, T) + 1)
         start_idx = np.random.randint(0, T - crop_size + 1)
         cropped_tensor = tensor[start_idx : start_idx + crop_size]
 
         return cropped_tensor
+
 
 
 
