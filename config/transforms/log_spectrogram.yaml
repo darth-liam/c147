@@ -34,23 +34,23 @@ random_crop:
 gaussian_noise:
   _target_: emg2qwerty.transforms.GaussianNoise
   mean: 0.0
-  std: 0.01
+  std: 0.001
   apply_prob: 0.9
-
 
 ensure_valid_t_dim:
   _target_: emg2qwerty.transforms.EnsureValidTDim
-  n_fft: 64  # Ensure the time dimension is valid before STFT
+  n_fft: 64  # fix dim before fft
 
 transforms:
   train:
     - ${to_tensor}
     - ${random_crop}
-    - ${ensure_valid_t_dim}  # Now properly registered
+    - ${ensure_valid_t_dim}  
     - ${band_rotation}
     - ${temporal_jitter}
     - ${logspec}
     - ${specaug}
+    - ${gaussian_noise}
 
 
   val:

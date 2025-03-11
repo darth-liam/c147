@@ -266,22 +266,22 @@ class SpecAugment:
 class RandomCrop:
     min_crop_size: int
     max_crop_size: int
-    n_fft: int = 64  # STFT requires T >= n_fft
+    n_fft: int = 64 
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        print(f"Tensor Shape:  {tensor.shape}")
+        #print(f"Tensor Shape:  {tensor.shape}")
         T = tensor.shape[0]
-        print(f"Time Dimension:  {T}")
+        #print(f"Time Dimension:  {T}")
         min_valid_crop = max(self.min_crop_size, self.n_fft)
 
         if T < min_valid_crop:
             pad_amount = min_valid_crop - T
             tensor = torch.nn.functional.pad(tensor, (0, 0, 0, 0, 0, pad_amount))  # Pad time dimension
-        
+
         crop_size = np.random.randint(min_valid_crop, min(self.max_crop_size, T) + 1)
         start_idx = np.random.randint(0, T - crop_size + 1)
         cropped_tensor = tensor[start_idx : start_idx + crop_size]
-        print(f"Shape of Cropped Tensor: {cropped_tensor.shape}")
+        #print(f"Shape of Cropped Tensor: {cropped_tensor.shape}")
         return cropped_tensor
 
 
@@ -299,6 +299,8 @@ class EnsureValidTDim:
             tensor = F.pad(tensor, (0, 0, 0, 0, 0, pad_amount))  # Pad time dimension
         return tensor
     
+
+    
 @dataclass
 class GaussianNoise:
     """Applies Gaussian noise to the input tensor.
@@ -309,9 +311,9 @@ class GaussianNoise:
         apply_prob (float): Probability of applying noise to a sample. (default: 1.0)
     """
 
-    mean: float = 0.0
-    std: float = 0.01  # Adjust this based on noise tolerance for EMG
-    apply_prob: float = 1.0
+    mean: float 
+    std: float 
+    apply_prob: float 
 
     def __post_init__(self) -> None:
         assert self.std >= 0, "Standard deviation must be non-negative."
