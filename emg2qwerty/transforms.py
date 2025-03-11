@@ -268,16 +268,10 @@ class RandomCrop:
     max_crop_size: int
     n_fft: int = 64  # STFT requires T >= n_fft
 
-    def __post_init__(self):
-        assert self.min_crop_size >= self.n_fft, f"min_crop_size ({self.min_crop_size}) must be >= n_fft ({self.n_fft})"
-        assert self.max_crop_size >= self.min_crop_size, "max_crop_size must be >= min_crop_size"
-
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        """Randomly crops the time dimension while ensuring T_crop >= n_fft."""
-        if tensor.ndim < 3:
-            raise ValueError(f"Expected at least 3D input (T, B, C) or (T, N, B, C), got {tensor.shape}")
-
+        print(f"Tensor Shape:  {tensor.shape}")
         T = tensor.shape[0]
+        print(f"Time Dimension:  {T}")
         min_valid_crop = max(self.min_crop_size, self.n_fft)
 
         if T < min_valid_crop:
@@ -287,7 +281,7 @@ class RandomCrop:
         crop_size = np.random.randint(min_valid_crop, min(self.max_crop_size, T) + 1)
         start_idx = np.random.randint(0, T - crop_size + 1)
         cropped_tensor = tensor[start_idx : start_idx + crop_size]
-
+        print(f"Shape of Cropped Tensor: {cropped_tensor.shape}")
         return cropped_tensor
 
 
@@ -330,46 +324,3 @@ class GaussianNoise:
         noise = torch.normal(mean=self.mean, std=self.std, size=tensor.shape)
         return tensor + noise
 
-
-@dataclass
-class RandomMasking:
-    """Applies random masking along the time or channel dimension.
-
-    Args:
-        mask_prob (float): Probability of applying masking to a sample. (default: 1.0)
-        mask_ratio (float): Percentage of values to mask (0 to 1). (default: 0.1)
-        mask_dim (str): Dimension to apply masking ('time' or 'channel'). (default: 'time')
-        mask_value (float): Value to assign to the masked regions. (default: 0.0)
-    """
-
-    mask_prob: float = 1.0
-    mask_ratio: float = 0.1
-    mask_dim: str = "time"  # Can be "time" or "channel"
-    mask_value: float = 0.0
-
-    def __post_init__(self) -> None:
-        assert 0.0 <= self.mask_prob <= 1.0, "mask_prob must be between 0 and 1."
-        assert 0.0 <= self.mask_ratio <= 1.0, "mask_ratio must be between 0 and 1."
-        assert self.mask_dim in ["time", "channel"], "mask_dim must be 'time' or 'channel'."
-
-    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        if np.random.rand() > self.mask_prob:
-            return tensor  # No masking applied
-
-        masked_tensor = tensor.clone()
-
-        if self.mask_dim == "time":
-            # Mask a percentage of time steps
-            num_time_steps = tensor.shape[0]
-            num_mask = int(self.mask_ratio * num_time_steps)
-            mask_indices = np.random.choice(num_time_steps, num_mask, replace=False)
-            masked_tensor[mask_indices, ...] = self.mask_value
-
-        elif self.mask_dim == "channel":
-            # Mask a percentage of channels
-            num_channels = tensor.shape[-1]
-            num_mask = int(self.mask_ratio * num_channels)
-            mask_indices = np.random.choice(num_channels, num_mask, replace=False)
-            masked_tensor[..., mask_indices] = self.mask_value
-
-        return masked_tensor

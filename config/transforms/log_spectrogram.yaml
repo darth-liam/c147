@@ -28,17 +28,8 @@ specaug:
 
 random_crop:
   _target_: emg2qwerty.transforms.RandomCrop
-  min_crop_size: 10
-  max_crop_size: 40
-
-
-random_masking:
-  _target_: emg2qwerty.transforms.RandomMasking
-  mask_prob: 0.9
-  mask_ratio: 0.15
-  mask_dim: "time"
-  mask_value: 0.0
-
+  min_crop_size: 100
+  max_crop_size: 128
 
 gaussian_noise:
   _target_: emg2qwerty.transforms.GaussianNoise
