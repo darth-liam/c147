@@ -254,36 +254,29 @@ class SpecAugment:
 
 @dataclass
 class RandomCrop:
-    """Applies random cropping along the time dimension.
-
-    Args:
-        min_crop_size (int): Minimum crop size.
-        max_crop_size (int): Maximum crop size.
-        time_dim (int): The time dimension index. (default: 0)
-    """
-
     min_crop_size: int
     max_crop_size: int
-    time_dim: int = 0
 
-    def __post_init__(self) -> None:
-        assert self.min_crop_size > 0 and self.max_crop_size > 0
-        assert self.min_crop_size <= self.max_crop_size
+    def __post_init__(self):
+        assert self.min_crop_size > 0, "min_crop_size must be greater than 0"
+        assert self.max_crop_size >= self.min_crop_size, "max_crop_size must be >= min_crop_size"
 
-    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        debug_shape("After RandomCrop", tensor)
-        original_length = tensor.shape[self.time_dim]
-
-        # Randomly determine crop size
+    def __call__(self, emg: np.ndarray) -> torch.Tensor:
+        # Assume the input is (channels, time), cropping along the time dimension
+        _, time_dim = emg.shape
         crop_size = np.random.randint(self.min_crop_size, self.max_crop_size + 1)
 
-        # Determine start index for cropping
-        max_start = max(0, original_length - crop_size)
-        start_idx = np.random.randint(0, max_start + 1) if max_start > 0 else 0
+        if time_dim <= crop_size:
+            return torch.tensor(emg, dtype=torch.float32)
 
-        # Apply cropping along the specified time dimension
-        return tensor.narrow(self.time_dim, start_idx, crop_size)
+        start_idx = np.random.randint(0, time_dim - crop_size + 1)
+        cropped_emg = emg[:, start_idx : start_idx + crop_size]
 
+        return torch.tensor(cropped_emg, dtype=torch.float32)
+    
+
+
+    
 @dataclass
 class GaussianNoise:
     """Applies Gaussian noise to the input tensor.
