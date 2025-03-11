@@ -277,7 +277,7 @@ class RandomCrop:
         if T < min_valid_crop:
             pad_amount = min_valid_crop - T
             tensor = torch.nn.functional.pad(tensor, (0, 0, 0, 0, 0, pad_amount))  # Pad time dimension
-
+        
         crop_size = np.random.randint(min_valid_crop, min(self.max_crop_size, T) + 1)
         start_idx = np.random.randint(0, T - crop_size + 1)
         cropped_tensor = tensor[start_idx : start_idx + crop_size]
