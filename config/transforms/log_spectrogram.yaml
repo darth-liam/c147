@@ -31,14 +31,32 @@ random_crop:
   min_crop_size: 100
   max_crop_size: 128
 
+
+random_masking:
+  _target_: emg2qwerty.transforms.RandomMasking
+  mask_prob: 0.9
+  mask_ratio: 0.15
+  mask_dim: "time"
+  mask_value: 0.0
+
+
+gaussian_noise:
+  _target_: emg2qwerty.transforms.GaussianNoise
+  mean: 0.0
+  std: 0.01
+  apply_prob: 0.9
+
+
 transforms:
   train:
     - ${to_tensor}
     - ${band_rotation}
     - ${temporal_jitter}
+    - ${random_crop} 
+    - ${random_masking} 
     - ${logspec}
     - ${specaug}
-    - ${random_crop} 
+    - ${gaussian_noise}  
 
   val:
     - ${to_tensor}
