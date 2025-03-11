@@ -49,13 +49,13 @@ smooth:
 transforms:
   train:
     - ${to_tensor}
-    - ${smooth}    # add blurring effect
-    - ${random_crop}  # augment data by also cropping 
+    #- ${smooth}    # add blurring effect
+    #- ${random_crop}  # augment data by also cropping 
     - ${band_rotation}
     - ${temporal_jitter}
     - ${logspec}
     - ${specaug}
-    - ${gaussian_noise} # add noise, should help regularisation
+    #- ${gaussian_noise} # add noise, should help regularisation
 
   val:
     - ${to_tensor}
