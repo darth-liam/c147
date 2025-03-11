@@ -264,13 +264,16 @@ class RandomCrop:
 
     def __call__(self, emg: torch.Tensor) -> torch.Tensor:
         """Randomly crops the time dimension of an EMG signal.
-        
+
         Args:
-            emg (torch.Tensor): Input tensor of shape (T, N, B, C).
+            emg (torch.Tensor): Input tensor of shape (T, B, C) or (T, N, B, C).
         
         Returns:
             torch.Tensor: Cropped tensor of shape (T_crop, N, B, C).
         """
+        if emg.ndim == 3:  # If (T, B, C), add batch dimension: (T, 1, B, C)
+            emg = emg.unsqueeze(1)
+
         if emg.ndim != 4:
             raise ValueError(f"Expected 4D input (T, N, B, C), got shape {emg.shape}")
 
@@ -284,6 +287,7 @@ class RandomCrop:
         cropped_emg = emg[start_idx : start_idx + crop_size, :, :, :]
 
         return cropped_emg
+
 
 
 @dataclass
