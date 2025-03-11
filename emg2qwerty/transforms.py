@@ -257,34 +257,28 @@ class SpecAugment:
 class RandomCrop:
     min_crop_size: int
     max_crop_size: int
+    n_fft: int = 64  # Ensure crop size is valid for spectrogram
 
     def __post_init__(self):
-        assert self.min_crop_size > 0, "min_crop_size must be greater than 0"
+        assert self.min_crop_size >= self.n_fft, f"min_crop_size ({self.min_crop_size}) must be >= n_fft ({self.n_fft})"
         assert self.max_crop_size >= self.min_crop_size, "max_crop_size must be >= min_crop_size"
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        """Randomly crops the time dimension of a (T, N, B, C) or (T, B, C) tensor.
-        
-        Args:
-            tensor (torch.Tensor): Input tensor where T is the time dimension.
-        
-        Returns:
-            torch.Tensor: Cropped tensor with same (N, B, C) shape but reduced T.
-        """
+        """Randomly crops the time dimension while ensuring T_crop >= n_fft."""
         if tensor.ndim < 3:
             raise ValueError(f"Expected at least 3D input (T, B, C) or (T, N, B, C), got {tensor.shape}")
 
-        # Identify time dimension (always first dimension)
         T = tensor.shape[0]
-        crop_size = np.random.randint(self.min_crop_size, self.max_crop_size + 1)
+        crop_size = np.random.randint(max(self.min_crop_size, self.n_fft), self.max_crop_size + 1)
 
         if T <= crop_size:
-            return tensor  # No cropping if already within range
+            return tensor  # Skip cropping if T is already too small
 
         start_idx = np.random.randint(0, T - crop_size + 1)
-        cropped_tensor = tensor[start_idx : start_idx + crop_size]  # Crop only time dimension
+        cropped_tensor = tensor[start_idx : start_idx + crop_size]
 
         return cropped_tensor
+
 
 
 @dataclass
