@@ -17,6 +17,9 @@ TTransformIn = TypeVar("TTransformIn")
 TTransformOut = TypeVar("TTransformOut")
 Transform = Callable[[TTransformIn], TTransformOut]
 
+def debug_shape(name, tensor):
+    print(f"{name} shape: {tensor.shape}")
+
 
 @dataclass
 class ToTensor:
@@ -136,10 +139,12 @@ class TemporalAlignmentJitter:
     max_offset: int
     stack_dim: int = 1
 
+
     def __post_init__(self) -> None:
         assert self.max_offset >= 0
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        debug_shape("After TemporalJitter", tensor)
         assert tensor.shape[self.stack_dim] == 2
         left, right = tensor.unbind(self.stack_dim)
 
@@ -183,6 +188,7 @@ class LogSpectrogram:
         )
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        debug_shape("After LogSpectrogram", tensor)
         x = tensor.movedim(0, -1)  # (T, ..., C) -> (..., C, T)
         spec = self.spectrogram(x)  # (..., C, freq, T)
         logspec = torch.log10(spec + 1e-6)  # (..., C, freq, T)
@@ -265,6 +271,7 @@ class RandomCrop:
         assert self.min_crop_size <= self.max_crop_size
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        debug_shape("After RandomCrop", tensor)
         original_length = tensor.shape[self.time_dim]
 
         # Randomly determine crop size

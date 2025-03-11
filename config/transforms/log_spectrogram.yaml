@@ -56,10 +56,10 @@ transforms:
     - ${to_tensor}
     - ${band_rotation}
     - ${temporal_jitter} 
+    - ${random_crop}
     #- ${random_masking} 
     - ${logspec}
     - ${specaug}
-    - ${random_crop}
     #- ${gaussian_noise}  
 
   val:
