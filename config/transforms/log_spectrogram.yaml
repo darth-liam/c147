@@ -26,6 +26,8 @@ specaug:
   freq_mask_param: 4
 
 
+
+
 random_crop:
   _target_: emg2qwerty.transforms.RandomCrop
   min_crop_size: 100
@@ -47,16 +49,18 @@ gaussian_noise:
   apply_prob: 0.9
 
 
+
+
 transforms:
   train:
     - ${to_tensor}
     - ${band_rotation}
     - ${temporal_jitter}
     - ${random_crop} 
-    - ${random_masking} 
+    #- ${random_masking} 
     - ${logspec}
     - ${specaug}
-    - ${gaussian_noise}  
+    #- ${gaussian_noise}  
 
   val:
     - ${to_tensor}
