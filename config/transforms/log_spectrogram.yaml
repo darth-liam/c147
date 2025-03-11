@@ -55,11 +55,11 @@ transforms:
   train:
     - ${to_tensor}
     - ${band_rotation}
-    - ${temporal_jitter}
-    - ${random_crop} 
+    - ${temporal_jitter} 
     #- ${random_masking} 
     - ${logspec}
     - ${specaug}
+    - ${random_crop}
     #- ${gaussian_noise}  
 
   val:
