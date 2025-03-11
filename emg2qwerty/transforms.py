@@ -11,6 +11,16 @@ from typing import Any, TypeVar
 import numpy as np
 import torch
 import torchaudio
+import torch.nn.functional as F
+
+def ensure_valid_t_dim(tensor, n_fft=64):
+    """Ensures the time dimension (T) is at least n_fft before STFT."""
+    T = tensor.shape[0]
+    if T < n_fft:
+        pad_amount = n_fft - T
+        tensor = F.pad(tensor, (0, 0, 0, 0, 0, pad_amount))  # Pad time
+    return tensor
+
 
 
 TTransformIn = TypeVar("TTransformIn")
@@ -255,7 +265,7 @@ class SpecAugment:
 class RandomCrop:
     min_crop_size: int
     max_crop_size: int
-    n_fft: int = 64  # Ensure crop size is valid for spectrogram
+    n_fft: int = 64  # STFT requires T >= n_fft
 
     def __post_init__(self):
         assert self.min_crop_size >= self.n_fft, f"min_crop_size ({self.min_crop_size}) must be >= n_fft ({self.n_fft})"
@@ -270,7 +280,8 @@ class RandomCrop:
         min_valid_crop = max(self.min_crop_size, self.n_fft)
 
         if T < min_valid_crop:
-            return tensor  # Skip cropping if T is too small
+            pad_amount = min_valid_crop - T
+            tensor = torch.nn.functional.pad(tensor, (0, 0, 0, 0, 0, pad_amount))  # Pad time dimension
 
         crop_size = np.random.randint(min_valid_crop, min(self.max_crop_size, T) + 1)
         start_idx = np.random.randint(0, T - crop_size + 1)
