@@ -190,16 +190,6 @@ class LogSpectrogram:
         )
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        """Ensure time dimension is valid before STFT."""
-        debug_shape("Before LogSpectrogram", tensor)
-
-        T = tensor.shape[0]  # Get time dimension
-        if T < self.n_fft:
-            print(f"WARNING: T={T} is too small for n_fft={self.n_fft}, applying padding.")
-            pad_amount = self.n_fft - T
-            tensor = torch.nn.functional.pad(tensor, (0, 0, 0, 0, pad_amount, 0))
-
-        debug_shape("After Padding (if applied)", tensor)
         x = tensor.movedim(0, -1)  # (T, ..., C) -> (..., C, T)
         spec = self.spectrogram(x)  # (..., C, freq, T)
         logspec = torch.log10(spec + 1e-6)  # (..., C, freq, T)
@@ -300,7 +290,7 @@ class EnsureValidTDim:
         return tensor
     
 
-    
+
 @dataclass
 class GaussianNoise:
     """Applies Gaussian noise to the input tensor.
@@ -326,3 +316,28 @@ class GaussianNoise:
         noise = torch.normal(mean=self.mean, std=self.std, size=tensor.shape)
         return tensor + noise
 
+
+@dataclass
+class Smooth:
+    downsample_factor: int = 4  # 10,000 → 2,500
+    mode: str = "linear"  # Interpolation mode: "nearest", "linear", "bicubic", etc.
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Downsamples then upsamples to create a blurring effect."""
+        T, *rest = tensor.shape  # Get time dimension
+        downsampled_T = T // self.downsample_factor  # Target downsampled size
+        
+        if downsampled_T < 1:
+            raise ValueError(f"Downsample factor too large, would reduce T={T} to {downsampled_T}")
+
+        # Downsample (interpolate to smaller size)
+        tensor = torch.nn.functional.interpolate(
+            tensor.unsqueeze(0), size=(downsampled_T, *rest), mode=self.mode, align_corners=False
+        ).squeeze(0)
+
+        # Upsample back to original size
+        tensor = torch.nn.functional.interpolate(
+            tensor.unsqueeze(0), size=(T, *rest), mode=self.mode, align_corners=False
+        ).squeeze(0)
+
+        return tensor

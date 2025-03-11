@@ -39,7 +39,25 @@ gaussian_noise:
 
 ensure_valid_t_dim:
   _target_: emg2qwerty.transforms.EnsureValidTDim
-  n_fft: 64  # fix dim before fft
+  n_fft: 64  # fix dim before fft - need for debug
+
+smooth:
+  _target_: emg2qwerty.transforms.Smooth
+  downsample_factor: 4
+  mode: "linear"
+
+transforms:
+  train:
+    - ${to_tensor}
+    - ${smooth}    # add blurring effect
+    - ${random_crop}  # augment data by also cropping 
+    - ${band_rotation}
+    - ${temporal_jitter}
+    - ${logspec}
+    - ${specaug}
+    - ${gaussian_noise} # add noise, should help regularisation
+
+
 
 transforms:
   train:
