@@ -252,6 +252,7 @@ class SpecAugment:
 
 
 
+
 @dataclass
 class RandomCrop:
     min_crop_size: int
@@ -261,22 +262,30 @@ class RandomCrop:
         assert self.min_crop_size > 0, "min_crop_size must be greater than 0"
         assert self.max_crop_size >= self.min_crop_size, "max_crop_size must be >= min_crop_size"
 
-    def __call__(self, emg: np.ndarray) -> torch.Tensor:
-        # Assume the input is (channels, time), cropping along the time dimension
-        _, time_dim = emg.shape
+    def __call__(self, emg: torch.Tensor) -> torch.Tensor:
+        """Randomly crops the time dimension of an EMG signal.
+        
+        Args:
+            emg (torch.Tensor): Input tensor of shape (T, N, B, C).
+        
+        Returns:
+            torch.Tensor: Cropped tensor of shape (T_crop, N, B, C).
+        """
+        if emg.ndim != 4:
+            raise ValueError(f"Expected 4D input (T, N, B, C), got shape {emg.shape}")
+
+        T_in, N, B, C = emg.shape
         crop_size = np.random.randint(self.min_crop_size, self.max_crop_size + 1)
 
-        if time_dim <= crop_size:
-            return torch.tensor(emg, dtype=torch.float32)
+        if T_in <= crop_size:
+            return emg  # No cropping if T_in is too small
 
-        start_idx = np.random.randint(0, time_dim - crop_size + 1)
-        cropped_emg = emg[:, start_idx : start_idx + crop_size]
+        start_idx = np.random.randint(0, T_in - crop_size + 1)
+        cropped_emg = emg[start_idx : start_idx + crop_size, :, :, :]
 
-        return torch.tensor(cropped_emg, dtype=torch.float32)
-    
+        return cropped_emg
 
 
-    
 @dataclass
 class GaussianNoise:
     """Applies Gaussian noise to the input tensor.

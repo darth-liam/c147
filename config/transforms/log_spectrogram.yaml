@@ -26,8 +26,6 @@ specaug:
   freq_mask_param: 4
 
 
-
-
 random_crop:
   _target_: emg2qwerty.transforms.RandomCrop
   min_crop_size: 100
