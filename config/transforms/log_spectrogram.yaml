@@ -49,8 +49,8 @@ smooth:
 transforms:
   train:
     - ${to_tensor}
-    #- ${smooth}    # add blurring effect
-    - ${random_crop}  # augment data by also cropping 
+    - ${smooth}    # add blurring effect
+    #- ${random_crop}  # augment data by also cropping 
     - ${band_rotation}
     - ${temporal_jitter}
     - ${logspec}
