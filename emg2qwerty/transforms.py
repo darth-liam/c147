@@ -15,7 +15,6 @@ import torch.nn.functional as F
 
 
 
-
 TTransformIn = TypeVar("TTransformIn")
 TTransformOut = TypeVar("TTransformOut")
 Transform = Callable[[TTransformIn], TTransformOut]
