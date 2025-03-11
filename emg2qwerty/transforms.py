@@ -320,24 +320,31 @@ class GaussianNoise:
 @dataclass
 class Smooth:
     downsample_factor: int = 4  # 10,000 → 2,500
-    mode: str = "linear"  # Interpolation mode: "nearest", "linear", "bicubic", etc.
+    mode: str = "linear"  # Interpolation mode: "nearest", "linear", "bicubic"
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
         """Downsamples then upsamples to create a blurring effect."""
-        T, *rest = tensor.shape  # Get time dimension
+        T, B, C = tensor.shape  # Extract time dimension and other dims
         downsampled_T = T // self.downsample_factor  # Target downsampled size
-        
+
         if downsampled_T < 1:
             raise ValueError(f"Downsample factor too large, would reduce T={T} to {downsampled_T}")
 
-        # Downsample (interpolate to smaller size)
-        tensor = torch.nn.functional.interpolate(
-            tensor.unsqueeze(0), size=(downsampled_T, *rest), mode=self.mode, align_corners=False
-        ).squeeze(0)
+        # Reshape to (B, C, T) for interpolation
+        tensor = tensor.permute(1, 2, 0)  # (T, B, C) → (B, C, T)
 
-        # Upsample back to original size
+        # Downsample
         tensor = torch.nn.functional.interpolate(
-            tensor.unsqueeze(0), size=(T, *rest), mode=self.mode, align_corners=False
-        ).squeeze(0)
+            tensor, size=downsampled_T, mode=self.mode, align_corners=False
+        )
+
+        # Upsample back
+        tensor = torch.nn.functional.interpolate(
+            tensor, size=T, mode=self.mode, align_corners=False
+        )
+
+        # Move back to (T, B, C)
+        tensor = tensor.permute(2, 0, 1)  # (B, C, T) → (T, B, C)
 
         return tensor
+
