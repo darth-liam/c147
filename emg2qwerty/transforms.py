@@ -191,6 +191,16 @@ class LogSpectrogram:
         )
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Ensure time dimension is valid before STFT."""
+        debug_shape("Before LogSpectrogram", tensor)
+
+        T = tensor.shape[0]  # Get time dimension
+        if T < self.n_fft:
+            print(f"WARNING: T={T} is too small for n_fft={self.n_fft}, applying padding.")
+            pad_amount = self.n_fft - T
+            tensor = torch.nn.functional.pad(tensor, (0, 0, 0, 0, pad_amount, 0))
+
+        debug_shape("After Padding (if applied)", tensor)
         x = tensor.movedim(0, -1)  # (T, ..., C) -> (..., C, T)
         spec = self.spectrogram(x)  # (..., C, freq, T)
         logspec = torch.log10(spec + 1e-6)  # (..., C, freq, T)
