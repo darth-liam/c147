@@ -47,17 +47,20 @@ gaussian_noise:
   apply_prob: 0.9
 
 
-
+ensure_valid_t_dim:
+  _target_: emg2qwerty.transforms.EnsureValidTDim
+  n_fft: 64  # Ensure the time dimension is valid before STFT
 
 transforms:
   train:
     - ${to_tensor}
     - ${random_crop}
-    - ${ensure_valid_t_dim}  
+    - ${ensure_valid_t_dim}  # Now properly registered
     - ${band_rotation}
     - ${temporal_jitter}
     - ${logspec}
     - ${specaug}
+
 
   val:
     - ${to_tensor}

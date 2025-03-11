@@ -13,13 +13,6 @@ import torch
 import torchaudio
 import torch.nn.functional as F
 
-def ensure_valid_t_dim(tensor, n_fft=64):
-    """Ensures the time dimension (T) is at least n_fft before STFT."""
-    T = tensor.shape[0]
-    if T < n_fft:
-        pad_amount = n_fft - T
-        tensor = F.pad(tensor, (0, 0, 0, 0, 0, pad_amount))  # Pad time
-    return tensor
 
 
 
@@ -198,7 +191,6 @@ class LogSpectrogram:
         )
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        debug_shape("After LogSpectrogram", tensor)
         x = tensor.movedim(0, -1)  # (T, ..., C) -> (..., C, T)
         spec = self.spectrogram(x)  # (..., C, freq, T)
         logspec = torch.log10(spec + 1e-6)  # (..., C, freq, T)
@@ -291,7 +283,19 @@ class RandomCrop:
 
 
 
+@dataclass
+class EnsureValidTDim:
+    """Ensures the time dimension (T) is at least n_fft before STFT."""
 
+    n_fft: int = 64  # Match the STFT requirement
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        T = tensor.shape[0]
+        if T < self.n_fft:
+            pad_amount = self.n_fft - T
+            tensor = F.pad(tensor, (0, 0, 0, 0, 0, pad_amount))  # Pad time dimension
+        return tensor
+    
 @dataclass
 class GaussianNoise:
     """Applies Gaussian noise to the input tensor.
