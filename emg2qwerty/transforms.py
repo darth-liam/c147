@@ -262,32 +262,29 @@ class RandomCrop:
         assert self.min_crop_size > 0, "min_crop_size must be greater than 0"
         assert self.max_crop_size >= self.min_crop_size, "max_crop_size must be >= min_crop_size"
 
-    def __call__(self, emg: torch.Tensor) -> torch.Tensor:
-        """Randomly crops the time dimension of an EMG signal.
-
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Randomly crops the time dimension of a (T, N, B, C) or (T, B, C) tensor.
+        
         Args:
-            emg (torch.Tensor): Input tensor of shape (T, B, C) or (T, N, B, C).
+            tensor (torch.Tensor): Input tensor where T is the time dimension.
         
         Returns:
-            torch.Tensor: Cropped tensor of shape (T_crop, N, B, C).
+            torch.Tensor: Cropped tensor with same (N, B, C) shape but reduced T.
         """
-        if emg.ndim == 3:  # If (T, B, C), add batch dimension: (T, 1, B, C)
-            emg = emg.unsqueeze(1)
+        if tensor.ndim < 3:
+            raise ValueError(f"Expected at least 3D input (T, B, C) or (T, N, B, C), got {tensor.shape}")
 
-        if emg.ndim != 4:
-            raise ValueError(f"Expected 4D input (T, N, B, C), got shape {emg.shape}")
-
-        T_in, N, B, C = emg.shape
+        # Identify time dimension (always first dimension)
+        T = tensor.shape[0]
         crop_size = np.random.randint(self.min_crop_size, self.max_crop_size + 1)
 
-        if T_in <= crop_size:
-            return emg  # No cropping if T_in is too small
+        if T <= crop_size:
+            return tensor  # No cropping if already within range
 
-        start_idx = np.random.randint(0, T_in - crop_size + 1)
-        cropped_emg = emg[start_idx : start_idx + crop_size, :, :, :]
+        start_idx = np.random.randint(0, T - crop_size + 1)
+        cropped_tensor = tensor[start_idx : start_idx + crop_size]  # Crop only time dimension
 
-        return cropped_emg
-
+        return cropped_tensor
 
 
 @dataclass
