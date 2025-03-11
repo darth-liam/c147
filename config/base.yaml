@@ -50,3 +50,24 @@ hydra:
           - checkpoint
           - cluster
           - trainer.accelerator
+  job_logging:
+    root:
+      level: INFO
+    formatters:
+      simple:
+        format: '[%(asctime)s] %(levelname)s - %(message)s'
+    handlers:
+      console:
+        class: logging.StreamHandler
+        level: INFO
+        formatter: simple
+        stream: ext://sys.stdout  # Print logs to terminal
+      file:
+        class: logging.FileHandler
+        level: INFO
+        formatter: simple
+        filename: ${hydra.run.dir}/output.log  # Save logs in timestamped folder
+    loggers:
+      root:
+        level: INFO
+        handlers: [console, file]
