@@ -57,20 +57,6 @@ transforms:
     - ${specaug}
     - ${gaussian_noise} # add noise, should help regularisation
 
-
-
-transforms:
-  train:
-    - ${to_tensor}
-    - ${random_crop}
-    - ${ensure_valid_t_dim}  
-    - ${band_rotation}
-    - ${temporal_jitter}
-    - ${logspec}
-    - ${specaug}
-    - ${gaussian_noise}
-
-
   val:
     - ${to_tensor}
     - ${logspec}
