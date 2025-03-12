@@ -1,6 +1,6 @@
 # @package _global_
 module:
-  _target_: emg2qwerty.lightning.TransformerEncoderCTCModule
+  _target_: emg2qwerty.lightning.TransformerCTCModule
   in_features: 528  
   num_layers: 4
   num_heads: 8
