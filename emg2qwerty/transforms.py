@@ -271,6 +271,9 @@ class RandomCrop:
         start_idx = np.random.randint(0, T - crop_size + 1)
         cropped_tensor = tensor[start_idx : start_idx + crop_size]
         #print(f"Shape of Cropped Tensor: {cropped_tensor.shape}")
+        if cropped_tensor.shape[0] < tensor.shape[0]:  # Only pad if needed
+            pad_amount = tensor.shape[0] - cropped_tensor.shape[0]
+            cropped_tensor = torch.nn.functional.pad(cropped_tensor, (0, 0, 0, 0, pad_amount, 0))
 
         return torch.cat([tensor.unsqueeze(0), cropped_tensor.unsqueeze(0)], dim=0)
 
