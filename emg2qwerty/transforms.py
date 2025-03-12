@@ -272,7 +272,8 @@ class RandomCrop:
         cropped_tensor = tensor[start_idx : start_idx + crop_size]
         #print(f"Shape of Cropped Tensor: {cropped_tensor.shape}")
 
-        return [tensor, cropped_tensor]
+        return torch.cat([tensor.unsqueeze(0), cropped_tensor.unsqueeze(0)], dim=0)
+
 
 
 
@@ -320,10 +321,14 @@ class GaussianNoise:
 
 @dataclass
 class Smooth:
-    downsample_factor: int = 4  # 10,000 → 2,500
-    mode: str = "linear"  # Interpolation mode: "nearest", "linear", "bicubic"
+    downsample_factor: int  # 10,000 → 2,500
+    mode: str  # Interpolation mode: "nearest", "linear", "bicubic"
+    apply_prob: float
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        if np.random.rand() > self.apply_prob:
+            return tensor  # Skip augmentation for this sample
+
         """Downsamples then upsamples to create a blurring effect."""
         T, B, C = tensor.shape  # Extract time dimension and other dims
         downsampled_T = T // self.downsample_factor  # Target downsampled size
