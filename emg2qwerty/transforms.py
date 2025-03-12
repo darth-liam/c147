@@ -256,6 +256,7 @@ class RandomCrop:
     min_crop_size: int
     max_crop_size: int
     n_fft: int = 64 
+    expand_batch: bool = True  # New flag to control batch expansion
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
         #print(f"Tensor Shape:  {tensor.shape}")
@@ -271,13 +272,13 @@ class RandomCrop:
         start_idx = np.random.randint(0, T - crop_size + 1)
         cropped_tensor = tensor[start_idx : start_idx + crop_size]
         #print(f"Shape of Cropped Tensor: {cropped_tensor.shape}")
-        if cropped_tensor.shape[0] < tensor.shape[0]:  # Only pad if needed
-            pad_amount = tensor.shape[0] - cropped_tensor.shape[0]
-            cropped_tensor = torch.nn.functional.pad(cropped_tensor, (0, 0, 0, 0, pad_amount, 0))
+        # Pad cropped tensor back to original T
+        if cropped_tensor.shape[0] < T:
+            pad_amount = T - cropped_tensor.shape[0]
+            cropped_tensor = F.pad(cropped_tensor, (0, 0, 0, 0, pad_amount, 0))
 
-        return torch.cat([tensor.unsqueeze(0), cropped_tensor.unsqueeze(0)], dim=0)
-
-
+        # Stack the original and cropped tensors to expand in N (batch) direction
+        return torch.stack([tensor, cropped_tensor], dim=0)  # (2, T, B, C)
 
 
 

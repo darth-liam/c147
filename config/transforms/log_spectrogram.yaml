@@ -27,11 +27,9 @@ specaug:
 
 
 random_crop:
-  _target_: emg2qwerty.transforms.ForEach
-  transform:
-    _target_: emg2qwerty.transforms.RandomCrop
-    min_crop_size: 100
-    max_crop_size: 128
+  _target_: emg2qwerty.transforms.RandomCrop
+  min_crop_size: 5000
+  max_crop_size:  9000
 
 
 gaussian_noise:
