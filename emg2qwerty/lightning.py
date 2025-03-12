@@ -886,45 +886,40 @@ class GRUCTCModule(pl.LightningModule):
 
 
 class TransformerCTCModule(pl.LightningModule):
-    NUM_BANDS: ClassVar[int] = 2
-    ELECTRODE_CHANNELS: ClassVar[int] = 16
+    NUM_BANDS: int = 2
+    ELECTRODE_CHANNELS: int = 16
 
     def __init__(
         self,
         in_features: int,
-        mlp_features: Sequence[int],
-        block_channels: Sequence[int],
-        kernel_width: int,
-        optimizer: DictConfig,
-        lr_scheduler: DictConfig,
-        decoder: DictConfig,
         num_layers: int,
         num_heads: int,
+        feedforward_dim: int = 256,
+        dropout: float = 0.1,
+        optimizer: dict = None,
+        lr_scheduler: dict = None,
+        decoder: dict = None,
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
 
-        num_features = self.NUM_BANDS * mlp_features[-1]
+        num_features = self.NUM_BANDS * self.ELECTRODE_CHANNELS
         self.model = nn.Sequential(
-            SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
-            MultiBandRotationInvariantMLP(
-                in_features=in_features,
-                mlp_features=mlp_features,
-                num_bands=self.NUM_BANDS,
-            ),
+            SpectrogramNorm(channels=num_features),
             nn.Flatten(start_dim=2),
-            TransformerEncoder(  
+            TransformerEncoder(
                 num_features=num_features,
-                num_layers=6,
-                num_heads=8,
-                ff_hidden_size=256,
+                num_layers=num_layers,
+                num_heads=num_heads,
+                ff_hidden_size=feedforward_dim,
+                dropout=dropout,
             ),
-            nn.Linear(num_features, 128),  
+            nn.Linear(num_features, 128),
             nn.LogSoftmax(dim=-1),
         )
 
-        self.ctc_loss = nn.CTCLoss(blank=0)  # Assuming blank index = 0
-        self.decoder = instantiate(decoder)
+        self.ctc_loss = nn.CTCLoss(blank=0)
+        self.decoder = instantiate(decoder) if decoder else None
 
         metrics = MetricCollection([CharacterErrorRates()])
         self.metrics = nn.ModuleDict(
@@ -952,17 +947,18 @@ class TransformerCTCModule(pl.LightningModule):
             target_lengths=target_lengths,
         )
 
-        predictions = self.decoder.decode_batch(
-            emissions=emissions.detach().cpu().numpy(),
-            emission_lengths=emission_lengths.detach().cpu().numpy(),
-        )
+        if self.decoder:
+            predictions = self.decoder.decode_batch(
+                emissions=emissions.detach().cpu().numpy(),
+                emission_lengths=emission_lengths.detach().cpu().numpy(),
+            )
 
-        metrics = self.metrics[f"{phase}_metrics"]
-        targets = targets.detach().cpu().numpy()
-        target_lengths = target_lengths.detach().cpu().numpy()
-        for i in range(N):
-            target = LabelData.from_labels(targets[: target_lengths[i], i])
-            metrics.update(prediction=predictions[i], target=target)
+            metrics = self.metrics[f"{phase}_metrics"]
+            targets = targets.detach().cpu().numpy()
+            target_lengths = target_lengths.detach().cpu().numpy()
+            for i in range(N):
+                target = LabelData.from_labels(targets[: target_lengths[i], i])
+                metrics.update(prediction=predictions[i], target=target)
 
         self.log(f"{phase}/loss", loss, batch_size=N, sync_dist=True)
         return loss
@@ -990,9 +986,9 @@ class TransformerCTCModule(pl.LightningModule):
     def on_test_epoch_end(self) -> None:
         self._epoch_end("test")
 
-    def configure_optimizers(self) -> dict[str, Any]:
-        return utils.instantiate_optimizer_and_scheduler(
-            self.parameters(),
-            optimizer_config=self.hparams.optimizer,
-            lr_scheduler_config=self.hparams.lr_scheduler,
-        )
+    def configure_optimizers(self):
+        if self.hparams.optimizer and self.hparams.lr_scheduler:
+            optimizer = instantiate(self.hparams.optimizer, params=self.parameters())
+            scheduler = instantiate(self.hparams.lr_scheduler, optimizer=optimizer)
+            return {"optimizer": optimizer, "lr_scheduler": scheduler}
+        return None
