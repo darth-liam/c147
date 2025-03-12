@@ -509,3 +509,53 @@ class GRUEncoder(nn.Module):
         x = self.fc_block(x)
         x = self.out_layer(x)
         return x
+
+
+class TransformerBlock(nn.Module):
+    """A Transformer encoder block with multi-head self-attention and feed-forward layers."""
+    def __init__(self, embed_dim, num_heads, feedforward_dim, dropout=0.1):
+        super().__init__()
+        self.attention = nn.MultiheadAttention(embed_dim, num_heads, dropout=dropout, batch_first=True)
+        self.feed_forward = nn.Sequential(
+            nn.Linear(embed_dim, feedforward_dim),
+            nn.ReLU(),
+            nn.Linear(feedforward_dim, embed_dim),
+        )
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.dropout = nn.Dropout(dropout)
+
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        attn_output, _ = self.attention(inputs, inputs, inputs)
+        x = self.norm1(inputs + self.dropout(attn_output))
+        ff_output = self.feed_forward(x)
+        return self.norm2(x + self.dropout(ff_output))
+
+
+class TransformerEncoder(nn.Module):
+    """A stack of Transformer blocks for sequence encoding."""
+    def __init__(
+        self,
+        num_features: int,
+        block_channels: Sequence[int] = (24, 24, 24, 24),
+        num_heads: int = 8,
+        feedforward_dim: int = 256,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__()
+        self.blocks = nn.ModuleList([
+            TransformerBlock(num_features, num_heads, feedforward_dim, dropout)
+            for _ in block_channels
+        ])
+        self.fc_block = TransformerFCBlock(num_features)
+
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        x = inputs
+        for block in self.blocks:
+            x = block(x)
+        return self.fc_block(x)
+
+
+
