@@ -55,7 +55,7 @@ transforms:
     - ${temporal_jitter}
     - ${logspec}
     - ${specaug}
-    - ${gaussian_noise} # add noise, should help regularisation
+    #- ${gaussian_noise} # add noise, should help regularisation
 
   val:
     - ${to_tensor}
