@@ -256,8 +256,7 @@ class RandomCrop:
     min_crop_size: int
     max_crop_size: int
     n_fft: int = 64 
-    expand_batch: bool = True  # New flag to control batch expansion
-
+ 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
         #print(f"Tensor Shape:  {tensor.shape}")
         T = tensor.shape[0]
