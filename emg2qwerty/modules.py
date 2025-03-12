@@ -8,6 +8,7 @@ from collections.abc import Sequence
 
 import torch
 from torch import nn
+from typing import Sequence
 
 
 class SpectrogramNorm(nn.Module):
@@ -512,7 +513,6 @@ class GRUEncoder(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    """A Transformer encoder block with multi-head self-attention and feed-forward layers."""
     def __init__(self, embed_dim, num_heads, feedforward_dim, dropout=0.1):
         super().__init__()
         self.attention = nn.MultiheadAttention(embed_dim, num_heads, dropout=dropout, batch_first=True)
@@ -525,7 +525,6 @@ class TransformerBlock(nn.Module):
         self.norm2 = nn.LayerNorm(embed_dim)
         self.dropout = nn.Dropout(dropout)
 
-
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         attn_output, _ = self.attention(inputs, inputs, inputs)
         x = self.norm1(inputs + self.dropout(attn_output))
@@ -534,28 +533,26 @@ class TransformerBlock(nn.Module):
 
 
 class TransformerEncoder(nn.Module):
-    """A stack of Transformer blocks for sequence encoding."""
     def __init__(
         self,
         num_features: int,
-        block_channels: Sequence[int] = (24, 24, 24, 24),
+        num_layers: int = 4,  # Matches LSTM/GRU structure
         num_heads: int = 8,
         feedforward_dim: int = 256,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
+        
         self.blocks = nn.ModuleList([
             TransformerBlock(num_features, num_heads, feedforward_dim, dropout)
-            for _ in block_channels
+            for _ in range(num_layers)
         ])
-        self.fc_block = TransformerFCBlock(num_features)
 
+        self.out_layer = nn.Linear(num_features, num_features)  # Final output layer
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x = inputs
         for block in self.blocks:
             x = block(x)
-        return self.fc_block(x)
-
-
-
+        x = self.out_layer(x)  # Final transformation
+        return x

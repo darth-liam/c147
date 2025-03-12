@@ -885,23 +885,16 @@ class GRUCTCModule(pl.LightningModule):
         )
 
 
-class TransformerEncoderCTCModule(pl.LightningModule):
-    """A Transformer-based module for keystroke prediction from EMG spectrograms."""
-
-
+class TransformerCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
-
 
     def __init__(
         self,
         in_features: int,
         mlp_features: Sequence[int],
         block_channels: Sequence[int],
-        num_heads: int,
-        feedforward_dim: int,
-        num_layers: int,
-        dropout: float,
+        kernel_width: int,
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
@@ -909,67 +902,46 @@ class TransformerEncoderCTCModule(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-
         num_features = self.NUM_BANDS * mlp_features[-1]
-
-
-        # Model definition (keeping temporal dimension)
         self.model = nn.Sequential(
             SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
             MultiBandRotationInvariantMLP(
                 in_features=in_features,
                 mlp_features=mlp_features,
-                num_bands=self.NUM_BANDS
+                num_bands=self.NUM_BANDS,
             ),
             nn.Flatten(start_dim=2),
-            TransformerEncoder(
+            TransformerEncoder(  
                 num_features=num_features,
-                block_channels=block_channels,
-                num_heads=num_heads,
-                feedforward_dim=feedforward_dim,
-                num_layers=num_layers,
-                dropout=dropout,
+                num_layers=6,
+                num_heads=8,
+                ff_hidden_size=256,
             ),
-            nn.Linear(num_features, charset().num_classes),
+            nn.Linear(num_features, 128),  # Set to a fixed number instead of vocab size
             nn.LogSoftmax(dim=-1),
         )
 
-
-        # Loss function
-        self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
-
-
-        # Decoder
+        self.ctc_loss = nn.CTCLoss(blank=0)  # Assuming blank index = 0
         self.decoder = instantiate(decoder)
 
-
-        # Metrics
         metrics = MetricCollection([CharacterErrorRates()])
-        self.metrics = nn.ModuleDict({
-            f"{phase}_metrics": metrics.clone(prefix=f"{phase}/")
-            for phase in ["train", "val", "test"]
-        })
-
+        self.metrics = nn.ModuleDict(
+            {f"{phase}_metrics": metrics.clone(prefix=f"{phase}/") for phase in ["train", "val", "test"]}
+        )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.model(inputs)
 
-
-    def _step(self, phase: str, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
+    def _step(self, phase: str, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         inputs = batch["inputs"]
         targets = batch["targets"]
         input_lengths = batch["input_lengths"]
         target_lengths = batch["target_lengths"]
         N = len(input_lengths)
 
-
         emissions = self.forward(inputs)
-
-
-        # Adjust input lengths for CTCLoss
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
-
 
         loss = self.ctc_loss(
             log_probs=emissions,
@@ -978,15 +950,11 @@ class TransformerEncoderCTCModule(pl.LightningModule):
             target_lengths=target_lengths,
         )
 
-
-        # Decode emissions
         predictions = self.decoder.decode_batch(
             emissions=emissions.detach().cpu().numpy(),
             emission_lengths=emission_lengths.detach().cpu().numpy(),
         )
 
-
-        # Update metrics
         metrics = self.metrics[f"{phase}_metrics"]
         targets = targets.detach().cpu().numpy()
         target_lengths = target_lengths.detach().cpu().numpy()
@@ -994,40 +962,31 @@ class TransformerEncoderCTCModule(pl.LightningModule):
             target = LabelData.from_labels(targets[: target_lengths[i], i])
             metrics.update(prediction=predictions[i], target=target)
 
-
         self.log(f"{phase}/loss", loss, batch_size=N, sync_dist=True)
         return loss
-
 
     def _epoch_end(self, phase: str) -> None:
         metrics = self.metrics[f"{phase}_metrics"]
         self.log_dict(metrics.compute(), sync_dist=True)
         metrics.reset()
 
+    def training_step(self, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
+        return self._step("train", batch)
 
-    def training_step(self, *args, **kwargs) -> torch.Tensor:
-        return self._step("train", *args, **kwargs)
+    def validation_step(self, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
+        return self._step("val", batch)
 
-
-    def validation_step(self, *args, **kwargs) -> torch.Tensor:
-        return self._step("val", *args, **kwargs)
-
-
-    def test_step(self, *args, **kwargs) -> torch.Tensor:
-        return self._step("test", *args, **kwargs)
-
+    def test_step(self, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
+        return self._step("test", batch)
 
     def on_train_epoch_end(self) -> None:
         self._epoch_end("train")
 
-
     def on_validation_epoch_end(self) -> None:
         self._epoch_end("val")
 
-
     def on_test_epoch_end(self) -> None:
         self._epoch_end("test")
-
 
     def configure_optimizers(self) -> dict[str, Any]:
         return utils.instantiate_optimizer_and_scheduler(
