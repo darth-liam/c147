@@ -276,9 +276,10 @@ class RandomCrop:
             pad_amount = T - cropped_tensor.shape[0]
             cropped_tensor = F.pad(cropped_tensor, (0, 0, 0, 0, pad_amount, 0))
 
-        # Stack the original and cropped tensors to expand in N (batch) direction
-        return torch.stack([tensor, cropped_tensor], dim=0)  # (2, T, B, C)
 
+        stacked_tensor = torch.cat([tensor.unsqueeze(1), cropped_tensor.unsqueeze(1)], dim=1)  # (T, 2, B, C)
+        
+        return stacked_tensor
 
 
 @dataclass
