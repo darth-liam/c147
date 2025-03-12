@@ -277,9 +277,13 @@ class RandomCrop:
             cropped_tensor = F.pad(cropped_tensor, (0, 0, 0, 0, pad_amount, 0))
 
 
-        stacked_tensor = torch.cat([tensor.unsqueeze(1), cropped_tensor.unsqueeze(1)], dim=1)  # (T, 2, B, C)
-        
-        return stacked_tensor
+        print(f"DEBUG: Original Tensor Shape: {tensor.shape}")
+        print(f"DEBUG: Cropped Tensor Shape: {cropped_tensor.shape}")
+
+        expanded_tensor = torch.cat([tensor.unsqueeze(0), cropped_tensor.unsqueeze(0)], dim=0)
+        print(f"DEBUG: Expanded Tensor Shape (After Concat): {expanded_tensor.shape}")
+
+        return expanded_tensor
 
 
 @dataclass
