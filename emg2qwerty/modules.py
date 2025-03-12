@@ -33,7 +33,7 @@ class SpectrogramNorm(nn.Module):
         self.batch_norm = nn.BatchNorm2d(channels)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        print(f"DEBUG: inputs.shape = {inputs.shape}")
+        #print(f"DEBUG: inputs.shape = {inputs.shape}")
 
         T, N, bands, C, freq = inputs.shape  # (T, N, bands=2, C=16, freq)
         assert self.channels == bands * C
