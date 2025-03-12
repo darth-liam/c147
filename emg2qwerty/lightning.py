@@ -899,6 +899,7 @@ class TransformerCTCModule(pl.LightningModule):
         lr_scheduler: DictConfig,
         decoder: DictConfig,
         num_layers: int,
+        num_heads: int,
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
