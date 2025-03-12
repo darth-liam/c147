@@ -536,7 +536,7 @@ class TransformerEncoder(nn.Module):
     def __init__(
         self,
         num_features: int,
-        num_layers: int = 4,  # Matches LSTM/GRU structure
+        num_layers: int = 4,  
         num_heads: int = 8,
         feedforward_dim: int = 256,
         dropout: float = 0.1,
@@ -548,11 +548,11 @@ class TransformerEncoder(nn.Module):
             for _ in range(num_layers)
         ])
 
-        self.out_layer = nn.Linear(num_features, num_features)  # Final output layer
+        self.out_layer = nn.Linear(num_features, num_features) 
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x = inputs
         for block in self.blocks:
             x = block(x)
-        x = self.out_layer(x)  # Final transformation
+        x = self.out_layer(x) 
         return x

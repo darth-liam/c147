@@ -898,6 +898,7 @@ class TransformerCTCModule(pl.LightningModule):
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
+        num_layers: int,
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
@@ -917,7 +918,7 @@ class TransformerCTCModule(pl.LightningModule):
                 num_heads=8,
                 ff_hidden_size=256,
             ),
-            nn.Linear(num_features, 128),  # Set to a fixed number instead of vocab size
+            nn.Linear(num_features, 128),  
             nn.LogSoftmax(dim=-1),
         )
 
