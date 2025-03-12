@@ -258,9 +258,9 @@ class RandomCrop:
     n_fft: int = 64 
  
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        #print(f"Tensor Shape:  {tensor.shape}")
+        #print(f"shape:  {tensor.shape}")
         T = tensor.shape[0]
-        #print(f"Time Dimension:  {T}")
+        #print(f"time dim:  {T}")
         min_valid_crop = max(self.min_crop_size, self.n_fft)
 
         if T < min_valid_crop:
@@ -270,19 +270,18 @@ class RandomCrop:
         crop_size = np.random.randint(self.min_crop_size, min(self.max_crop_size, T) + 1)
         start_idx = np.random.randint(0, T - crop_size + 1)
         cropped_tensor = tensor[start_idx : start_idx + crop_size]
-        #print(f"Shape of Cropped Tensor: {cropped_tensor.shape}")
-        # Pad cropped tensor back to original T
+        #print(f"cropped tensor shape: {cropped_tensor.shape}")
         if cropped_tensor.shape[0] < T:
             pad_amount = T - cropped_tensor.shape[0]
             cropped_tensor = F.pad(cropped_tensor, (0, 0, 0, 0, pad_amount, 0))
 
 
-        #print(f"DEBUG: Original Tensor Shape: {tensor.shape}")
-        #print(f"DEBUG: Cropped Tensor Shape: {cropped_tensor.shape}")
+        #print(f"original tensor shape: {tensor.shape}")
+        #print(f"crop tensor shape: {cropped_tensor.shape}")
 
         expanded_tensor =  torch.cat([tensor, cropped_tensor], dim=0)  # Concatenate along batch (N) axis
 
-        #print(f"DEBUG: Expanded Tensor Shape (After Concat): {expanded_tensor.shape}")
+        #print(f"expand tensor shape: {expanded_tensor.shape}")
 
         return expanded_tensor
 

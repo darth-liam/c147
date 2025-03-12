@@ -277,7 +277,6 @@ class TDSConvCTCModule(pl.LightningModule):
         )
 
 
-
 class TDSLSTMCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
@@ -536,6 +535,7 @@ class SimpleCNNCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
 
+
 class MultiLayerCNNCTCModule(pl.LightningModule):
     """A CNN-based module for keystroke prediction from EMG spectrograms."""
 
@@ -557,7 +557,6 @@ class MultiLayerCNNCTCModule(pl.LightningModule):
 
         num_features = self.NUM_BANDS * mlp_features[-1]  
 
-        # Model definition (keeping temporal dimension)
         #inputs: (T,N,bands=2, electrode channels = 16, freq)
         self.model = nn.Sequential(
             # (T,N,bands,C,freq)
@@ -575,13 +574,8 @@ class MultiLayerCNNCTCModule(pl.LightningModule):
             nn.LogSoftmax(dim=-1),
         )
 
-        # Loss function
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
-
-        # Decoder (same as TDSConvCTCModule)
         self.decoder = instantiate(decoder)
-
-        # Metrics
         metrics = MetricCollection([CharacterErrorRates()])
         self.metrics = nn.ModuleDict({
             f"{phase}_metrics": metrics.clone(prefix=f"{phase}/")
@@ -663,9 +657,8 @@ class MultiLayerCNNCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
 
-class LSTMEncoderCTCModule(pl.LightningModule):
-    """An LSTM-based module for keystroke prediction from EMG spectrograms."""
 
+class LSTMEncoderCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
 
@@ -681,10 +674,7 @@ class LSTMEncoderCTCModule(pl.LightningModule):
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
-
         num_features = self.NUM_BANDS * mlp_features[-1]
-
-        # Model definition (keeping temporal dimension)
         self.model = nn.Sequential(
             # (T, N, bands=2, electrode_channels=16, freq)
             SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
@@ -704,13 +694,8 @@ class LSTMEncoderCTCModule(pl.LightningModule):
             nn.LogSoftmax(dim=-1),
         )
 
-        # Loss function
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
-
-        # Decoder
         self.decoder = instantiate(decoder)
-
-        # Metrics
         metrics = MetricCollection([CharacterErrorRates()])
         self.metrics = nn.ModuleDict({
             f"{phase}_metrics": metrics.clone(prefix=f"{phase}/")
@@ -730,10 +715,7 @@ class LSTMEncoderCTCModule(pl.LightningModule):
         N = len(input_lengths)
 
         emissions = self.forward(inputs)
-
-        # Adjust input lengths (assuming LSTM doesn't change temporal resolution)
         emission_lengths = input_lengths
-
         loss = self.ctc_loss(
             log_probs=emissions,  
             targets=targets.transpose(0, 1),  
@@ -788,6 +770,7 @@ class LSTMEncoderCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
 
+
 class GRUCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
@@ -814,7 +797,7 @@ class GRUCTCModule(pl.LightningModule):
                 num_bands=self.NUM_BANDS,
             ),
             nn.Flatten(start_dim=2),
-            GRUEncoder(  # Encoder is defined here, not passed as an argument
+            GRUEncoder(  
                 num_features=num_features,
                 gru_hidden_size=128,
                 num_gru_layers=4,
@@ -843,7 +826,6 @@ class GRUCTCModule(pl.LightningModule):
 
         emissions = self.forward(inputs)
 
-        # Adjust input lengths
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 

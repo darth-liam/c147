@@ -378,7 +378,7 @@ class MultiLayerCNNBlock(nn.Module):
         T_in, N, C = inputs.shape
 
         x = inputs.movedim(0, -1).reshape(N, self.channels, self.width, T_in)
-        x = self.conv_layers(x)  # Pass through 4 convolutional layers
+        x = self.conv_layers(x)  # 4 conv layers w. batchnorm
         x = x.reshape(N, C, -1).movedim(-1, 0)
         T_out = x.shape[0]
         x = x + inputs[-T_out:]
@@ -501,7 +501,7 @@ class GRUEncoder(nn.Module):
             batch_first=False,
             bidirectional=True,
         )
-        self.fc_block = CNNFCBlock(gru_hidden_size * 2)  # Reusing FC block from CNN
+        self.fc_block = CNNFCBlock(gru_hidden_size * 2)  
         self.out_layer = nn.Linear(gru_hidden_size * 2, num_features)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
