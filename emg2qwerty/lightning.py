@@ -889,51 +889,45 @@ class GRUCTCModule(pl.LightningModule):
 
 
 class TransformerCTCModule(pl.LightningModule):
-    NUM_BANDS: ClassVar[int] = 2
-    ELECTRODE_CHANNELS: ClassVar[int] = 16
-
     def __init__(
         self,
         in_features: int,
         num_layers: int,
         num_heads: int,
-        feedforward_dim: int, 
-        dropout: float, 
-        decoder: DictConfig,
+        feedforward_dim: int,
+        dropout: float,
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
-        mlp_features: Sequence[int],
+        decoder: DictConfig,
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
 
-        num_features = self.NUM_BANDS * mlp_features[-1]
+        # Model
         self.model = nn.Sequential(
-            SpectrogramNorm(channels=num_features),
-            MultiBandRotationInvariantMLP(
-                in_features=in_features,
-                mlp_features=[feedforward_dim],
-                num_bands=self.NUM_BANDS,
-            ),
+            SpectrogramNorm(),
+            MultiBandRotationInvariantMLP(in_features=in_features, mlp_features=[feedforward_dim]),
             nn.Flatten(start_dim=2),
             TransformerEncoder(
-                num_features=num_features,
+                num_features=in_features,
                 num_layers=num_layers,
                 num_heads=num_heads,
-                feedforward_dim=feedforward_dim, 
-                dropout=dropout,  
+                feedforward_dim=feedforward_dim,
+                dropout=dropout,
             ),
-            nn.Linear(num_features, charset().num_classes),
+            nn.Linear(in_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
         )
 
+        # Loss
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
+
+        # Decoder
         self.decoder = instantiate(decoder)
 
+        # Metrics
         metrics = MetricCollection([CharacterErrorRates()])
-        self.metrics = nn.ModuleDict(
-            {f"{phase}_metrics": metrics.clone(prefix=f"{phase}/") for phase in ["train", "val", "test"]}
-        )
+        self.metrics = nn.ModuleDict({f"{phase}_metrics": metrics.clone(prefix=f"{phase}/") for phase in ["train", "val", "test"]})
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.model(inputs)

@@ -1,12 +1,11 @@
 # @package _global_
 module:
   _target_: emg2qwerty.lightning.TransformerCTCModule
-  in_features: 528  
-  num_layers: 4
+  in_features: 528  # freq * channels = (n_fft // 2 + 1) * 16
+  num_layers: 6
   num_heads: 8
-  feedforward_dim: 256  
+  feedforward_dim: 2048
   dropout: 0.1
-  mlp_features: [384]
 
 datamodule:
   _target_: emg2qwerty.lightning.WindowedEMGDataModule
