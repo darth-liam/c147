@@ -1,3 +1,4 @@
+# @package _global_
 model:
   _target_: emg2qwerty.lightning.HybridEncoderCTCModule
   in_features: 200  # Adjust based on your input spectrogram size
