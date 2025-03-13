@@ -1,18 +1,18 @@
-# @package _global_
-module:
-  _target_: emg2qwerty.lightning.HybridCTCModule
-  in_features: 528  # freq * channels = (n_fft // 2 + 1) * 16
-  mlp_features: [384]
-  block_channels: [24, 24, 24, 24]  # TDSConv layers
-  kernel_width: 32  # Temporal receptive field of 125 samples
-  lstm_hidden_size: 128  # Hidden size for LSTM layers
+model:
+  _target_: HybridEncoderCTCModule
+  in_features: 200  # Adjust based on your input spectrogram size
+  mlp_features: [256, 128]  # Feature extraction layers
+  block_channels: [128, 256, 256]  # Channels for TDSConv blocks
+  kernel_width: 5  # Kernel size for TDSConv
+  lstm_hidden_size: 256  # Hidden size for BiLSTM
+  gru_hidden_size: 256  # Hidden size for BiGRU
   num_lstm_layers: 2  # Number of LSTM layers
-  gru_hidden_size: 128  # Hidden size for GRU layers
   num_gru_layers: 2  # Number of GRU layers
-  transformer_heads: 8  # Number of attention heads
-  transformer_ff_dim: 256  # Feedforward dimension for Transformer
+  num_transformer_layers: 2  # Number of Transformer layers
+  num_heads: 8  # Transformer multi-head attention heads
 
 datamodule:
   _target_: emg2qwerty.lightning.WindowedEMGDataModule
   window_length: 8000  # 4 sec windows for 2kHz EMG
   padding: [1800, 200]  # 900ms past context, 100ms future context
+
