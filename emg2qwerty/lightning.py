@@ -31,6 +31,7 @@ from emg2qwerty.modules import (
     TDSLSTMEncoder,
     GRUEncoder,
     TransformerEncoder,
+    HybridEncoder,
 )
 from emg2qwerty.transforms import Transform
 
@@ -1022,7 +1023,6 @@ class TransformerCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
 
-
 class HybridEncoderCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
@@ -1057,31 +1057,22 @@ class HybridEncoderCTCModule(pl.LightningModule):
                 num_bands=self.NUM_BANDS,
             ),
             nn.Flatten(start_dim=2),  # Flatten bands and features
-            TDSConvEncoder(
+            HybridEncoder(
                 num_features=num_features,
-                block_channels=block_channels,
+                lstm_hidden_size=lstm_hidden_size,
+                num_lstm_layers=num_lstm_layers,
+                tds_block_channels=block_channels,
                 kernel_width=kernel_width,
-            ),
-            LSTMEncoder(
-                input_dim=num_features,
-                hidden_size=lstm_hidden_size,
-                num_layers=num_lstm_layers,
-            ),
-            GRUEncoder(
-                input_dim=lstm_hidden_size * 2, 
-                hidden_size=gru_hidden_size,
-                num_layers=num_gru_layers,
-            ),
-            TransformerEncoder(
-                input_dim=gru_hidden_size * 2, 
-                num_layers=num_transformer_layers,
+                gru_hidden_size=gru_hidden_size,
+                num_gru_layers=num_gru_layers,
+                num_transformer_layers=num_transformer_layers,
                 num_heads=num_heads,
             ),
             nn.Linear(gru_hidden_size * 2, charset().num_classes),
             nn.LogSoftmax(dim=-1),
         )
 
-        # Criterion
+        # CTC Loss
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
 
         # Decoder
@@ -1100,23 +1091,23 @@ class HybridEncoderCTCModule(pl.LightningModule):
         return self.model(inputs)
 
     def _step(self, phase: str, batch: dict[str, torch.Tensor]) -> torch.Tensor:
-        inputs, targets, input_lengths, target_lengths = (
-            batch["inputs"],
-            batch["targets"],
-            batch["input_lengths"],
-            batch["target_lengths"],
-        )
-        N = len(input_lengths)
+        inputs = batch["inputs"]
+        targets = batch["targets"]
+        input_lengths = batch["input_lengths"]
+        target_lengths = batch["target_lengths"]
+        N = len(input_lengths)  # batch_size
 
         emissions = self.forward(inputs)
+
+        # Compute CTC emission lengths
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
         loss = self.ctc_loss(
-            log_probs=emissions,
-            targets=targets.transpose(0, 1),
-            input_lengths=emission_lengths,
-            target_lengths=target_lengths,
+            log_probs=emissions,  # (T, N, num_classes)
+            targets=targets.transpose(0, 1),  # (T, N) -> (N, T)
+            input_lengths=emission_lengths,  # (N,)
+            target_lengths=target_lengths,  # (N,)
         )
 
         # Decode emissions
@@ -1141,14 +1132,14 @@ class HybridEncoderCTCModule(pl.LightningModule):
         self.log_dict(metrics.compute(), sync_dist=True)
         metrics.reset()
 
-    def training_step(self, *args, **kwargs) -> torch.Tensor:
-        return self._step("train", *args, **kwargs)
+    def training_step(self, batch, *args, **kwargs) -> torch.Tensor:
+        return self._step("train", batch)
 
-    def validation_step(self, *args, **kwargs) -> torch.Tensor:
-        return self._step("val", *args, **kwargs)
+    def validation_step(self, batch, *args, **kwargs) -> torch.Tensor:
+        return self._step("val", batch)
 
-    def test_step(self, *args, **kwargs) -> torch.Tensor:
-        return self._step("test", *args, **kwargs)
+    def test_step(self, batch, *args, **kwargs) -> torch.Tensor:
+        return self._step("test", batch)
 
     def on_train_epoch_end(self) -> None:
         self._epoch_end("train")
