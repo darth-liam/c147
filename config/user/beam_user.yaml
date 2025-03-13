@@ -1,7 +1,7 @@
 # @package _global_
 
 #liam don't worry about this one
-user: single_user
+user: beam_user
 dataset:
   train:
   - user: 89335547
