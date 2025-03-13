@@ -553,3 +553,66 @@ class TransformerEncoder(nn.Module):
             x = block(x)
         maga_make_america_gay_again = self.out_layer(x) 
         return maga_make_america_gay_again
+
+
+class HybridEncoder(nn.Module):
+    def __init__(
+        self,
+        num_features: int,
+        lstm_hidden_size: int = 128,
+        num_lstm_layers: int = 2,
+        tds_block_channels: Sequence[int] = [128, 256, 256],
+        kernel_width: int = 5,
+        gru_hidden_size: int = 128,
+        num_gru_layers: int = 2,
+        num_transformer_layers: int = 2,
+        num_heads: int = 8,
+    ) -> None:
+        super().__init__()
+
+        # LSTM Encoder (Bidirectional)
+        self.lstm = nn.LSTM(
+            input_size=num_features,
+            hidden_size=lstm_hidden_size,
+            num_layers=num_lstm_layers,
+            batch_first=False,
+            bidirectional=True,
+        )
+
+        # TDS Conv Block
+        self.tds_block = TDSConvEncoder(
+            num_features=lstm_hidden_size * 2,  # BiLSTM output
+            block_channels=tds_block_channels,
+            kernel_width=kernel_width,
+        )
+
+        # GRU Encoder (Bidirectional)
+        self.gru = nn.GRU(
+            input_size=tds_block_channels[-1],  # Last TDS output channel
+            hidden_size=gru_hidden_size,
+            num_layers=num_gru_layers,
+            batch_first=False,
+            bidirectional=True,
+        )
+
+        # Transformer Encoder
+        self.transformer = TransformerEncoder(
+            input_dim=gru_hidden_size * 2,  # BiGRU output
+            num_layers=num_transformer_layers,
+            num_heads=num_heads,
+        )
+
+        # Fully Connected Block
+        self.fc_block = TDSFullyConnectedBlock(gru_hidden_size * 2)
+
+        # Output Layer
+        self.out_layer = nn.Linear(gru_hidden_size * 2, num_features)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        x, _ = self.lstm(inputs)  # (T, N, lstm_hidden_size * 2)
+        x = self.tds_block(x)  # (T, N, last_tds_channel)
+        x, _ = self.gru(x)  # (T, N, gru_hidden_size * 2)
+        x = self.transformer(x)  # (T, N, gru_hidden_size * 2)
+        x = self.fc_block(x)
+        x = self.out_layer(x)
+        return x

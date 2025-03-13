@@ -1068,12 +1068,12 @@ class HybridEncoderCTCModule(pl.LightningModule):
                 num_layers=num_lstm_layers,
             ),
             GRUEncoder(
-                input_dim=lstm_hidden_size * 2,  # BiLSTM output
+                input_dim=lstm_hidden_size * 2, 
                 hidden_size=gru_hidden_size,
                 num_layers=num_gru_layers,
             ),
             TransformerEncoder(
-                input_dim=gru_hidden_size * 2,  # BiGRU output
+                input_dim=gru_hidden_size * 2, 
                 num_layers=num_transformer_layers,
                 num_heads=num_heads,
             ),
