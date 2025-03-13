@@ -410,8 +410,7 @@ class TDSLSTMCTCModule(pl.LightningModule):
 
 
 class SimpleCNNCTCModule(pl.LightningModule):
-    """A CNN-based module for keystroke prediction from EMG spectrograms."""
-
+    #did you know that whales evolved from land animals. so they evolved to walk on land only to return to the water.
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
 
@@ -538,7 +537,8 @@ class SimpleCNNCTCModule(pl.LightningModule):
 
 
 class MultiLayerCNNCTCModule(pl.LightningModule):
-    """A CNN-based module for keystroke prediction from EMG spectrograms."""
+    #fun fact 2: tasmanian devils have the only trasmittable cancer we know of across any animal. 
+    #icl that's a sign from god like time to pack it up yall had a good run
 
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
@@ -660,6 +660,7 @@ class MultiLayerCNNCTCModule(pl.LightningModule):
 
 
 class LSTMEncoderCTCModule(pl.LightningModule):
+    #octopuses can edit their rna in real time (i kinda ran out of animal facts)
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
 
@@ -798,6 +799,7 @@ class GRUCTCModule(pl.LightningModule):
                 num_bands=self.NUM_BANDS,
             ),
             nn.Flatten(start_dim=2),
+            #i could prob fit a moon stealing joke in here but i bet that dead horse has been beaten, buried, then dug up and beaten again
             GRUEncoder(  
                 num_features=num_features,
                 gru_hidden_size=128,
@@ -883,6 +885,7 @@ class GRUCTCModule(pl.LightningModule):
             optimizer_config=self.hparams.optimizer,
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
+
 
 class TransformerCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2

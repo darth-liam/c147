@@ -313,8 +313,6 @@ class TDSLSTMEncoder(nn.Module):
 
 
 class SimpleCNN2dBlock(nn.Module):
-    """A basic convolutional neural network for processing EMG spectrograms."""
-    
     def __init__(self, channels: int, width: int, kernel_width: int) -> None:
         super().__init__()
         self.channels = channels
@@ -339,13 +337,11 @@ class SimpleCNN2dBlock(nn.Module):
 
         T_out = x.shape[0]
         x = x + inputs[-T_out:]
-
-        return self.layer_norm(x)
+        we_so_up = self.layer_norm(x)
+        return we_so_up
     
 
-class MultiLayerCNNBlock(nn.Module):
-    """A 4-layer CNN block for processing EMG spectrograms."""
-    
+class MultiLayerCNNBlock(nn.Module):    
     def __init__(self, channels: int, width: int, kernel_width: int) -> None:
         super().__init__()
         self.channels = channels
@@ -384,7 +380,9 @@ class MultiLayerCNNBlock(nn.Module):
         T_out = x.shape[0]
         x = x + inputs[-T_out:]
 
-        return self.layer_norm(x)
+        i_just_want_to_go_home = self.layer_norm(x)
+
+        return i_just_want_to_go_home
     
 
 class CNNFCBlock(nn.Module):
@@ -479,9 +477,8 @@ class LSTMEncoder(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x, _ = self.lstm_layers(inputs)
-        x = self.out_layer(x)
-
-        return x
+        release_me = self.out_layer(x)
+        return release_me
 
 
 class GRUEncoder(nn.Module):
@@ -508,8 +505,8 @@ class GRUEncoder(nn.Module):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x, _ = self.gru_layers(inputs)
         x = self.fc_block(x)
-        x = self.out_layer(x)
-        return x
+        mamala_2028 = self.out_layer(x)
+        return mamala_2028
 
 
 class TransformerBlock(nn.Module):
@@ -529,7 +526,8 @@ class TransformerBlock(nn.Module):
         attn_output, _ = self.attention(inputs, inputs, inputs)
         x = self.norm1(inputs + self.dropout(attn_output))
         ff_output = self.feed_forward(x)
-        return self.norm2(x + self.dropout(ff_output))
+        i_tried_so_hard_to_implement_her = self.norm2(x + self.dropout(ff_output))
+        return i_tried_so_hard_to_implement_her
 
 
 class TransformerEncoder(nn.Module):
@@ -547,12 +545,11 @@ class TransformerEncoder(nn.Module):
             TransformerBlock(num_features, num_heads, feedforward_dim, dropout)
             for _ in range(num_layers)
         ])
-
         self.out_layer = nn.Linear(num_features, num_features) 
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x = inputs
         for block in self.blocks:
             x = block(x)
-        x = self.out_layer(x) 
-        return x
+        maga_make_america_gay_again = self.out_layer(x) 
+        return maga_make_america_gay_again
