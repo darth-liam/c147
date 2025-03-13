@@ -1,5 +1,5 @@
 # @package _global_
-user: single_user
+user: three_user
 dataset:
   train:
   - user: 89335547

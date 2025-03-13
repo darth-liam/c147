@@ -1,5 +1,7 @@
 # @package _global_
-user: two_user
+
+#liam don't worry about this one
+user: single_user
 dataset:
   train:
   - user: 89335547
@@ -34,36 +36,9 @@ dataset:
     session: 2021-06-05-1622884635-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
   - user: 89335547
     session: 2021-07-21-1626915176-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
-  
-  - user: 42383274
-    session: 2021-07-02-1625237824-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
-  - user: 42383274
-    session: 2021-07-02-1625239253-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
-  - user: 42383274
-    session: 2021-07-03-1625329289-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
-  - user: 42383274
-    session: 2021-07-03-1625331595-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
-  - user: 42383274
-    session: 2021-07-03-1625330437-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
-  - user: 42383274
-    session: 2021-07-03-1625342969-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
-  - user: 42383274
-    session: 2021-07-03-1625344411-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
-  - user: 42383274
-    session: 2021-07-04-1625434046-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
-  - user: 42383274
-    session: 2021-07-04-1625432885-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
-  - user: 42383274
-    session: 2021-07-04-1625436434-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
-  
-
   val:
   - user: 89335547
     session: 2021-06-04-1622862148-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
-  - user: 42383274
-    session: 2021-07-02-1625240485-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
   test:
   - user: 89335547
     session: 2021-06-02-1622682789-keystrokes-dca-study@1-0efbe614-9ae6-4131-9192-4398359b4f5f
-  - user: 42383274
-    session: 2021-07-04-1625435299-keystrokes-dca-study@1-87449ca7-8a37-478f-acd7-3744b8181ba2
