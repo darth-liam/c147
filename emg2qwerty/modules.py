@@ -605,30 +605,31 @@ class HybridEncoder(nn.Module):
         self.out_layer = nn.Linear(gru_hidden_size * 2, num_features)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        print("Input shape:", inputs.shape)  # Initial shape
+        # bro the dims killed me here
+        #print("Input shape:", inputs.shape
 
         x, _ = self.lstm(inputs)  
-        print("After LSTM:", x.shape)  # (T, N, lstm_hidden_size * 2)
+        #print("After LSTM:", x.shape)  # (T, N, lstm_hidden_size * 2)
 
         x = self.tds_block(x)  
-        print("After TDSConv:", x.shape)  # (T, N, last_tds_channel)
+        #print("After TDSConv:", x.shape)  # (T, N, last_tds_channel)
 
         x = x.permute(1, 0, 2)  # (N, T, last_tds_channel)
-        print("Before tds_to_gru_proj (permute):", x.shape)
+        #print("Before tds_to_gru_proj (permute):", x.shape)
 
-        x = self.tds_to_gru_proj(x)  # Align to GRU expected input size
-        print("After tds_to_gru_proj:", x.shape)
+        x = self.tds_to_gru_proj(x)  
+        #print("After tds_to_gru_proj:", x.shape)
 
         x = x.permute(1, 0, 2)  # (T, N, gru_hidden_size * 2)
-        print("Before GRU:", x.shape)
+        #print("Before GRU:", x.shape)
 
         x, _ = self.gru(x)  
-        print("After GRU:", x.shape)  # (T, N, gru_hidden_size * 2)
+        #print("After GRU:", x.shape)  # (T, N, gru_hidden_size * 2)
 
         x = self.transformer(x)  
-        print("After Transformer:", x.shape)  # (T, N, gru_hidden_size * 2)
+        #print("After Transformer:", x.shape)  # (T, N, gru_hidden_size * 2)
 
         x = self.fc_block(x)
-        print("After Fully Connected Block:", x.shape)
+        #print("After Fully Connected Block:", x.shape)
 
         return x
