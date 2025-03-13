@@ -613,7 +613,12 @@ class HybridEncoder(nn.Module):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x, _ = self.lstm(inputs)  # (T, N, lstm_hidden_size * 2)
         x = self.tds_block(x)  # (T, N, last_tds_channel)
+        
+        # Ensure x is in (batch, seq_len, features) before linear layer
+        x = x.permute(1, 0, 2)  # (N, T, last_tds_channel)
         x = self.tds_to_gru_proj(x)  # Align to GRU expected input size
+        x = x.permute(1, 0, 2)  # (T, N, gru_hidden_size * 2)
+
         x, _ = self.gru(x)  # (T, N, gru_hidden_size * 2)
         x = self.transformer(x)  # (T, N, gru_hidden_size * 2)
         x = self.fc_block(x)
