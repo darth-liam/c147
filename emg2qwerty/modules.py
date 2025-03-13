@@ -554,19 +554,18 @@ class TransformerEncoder(nn.Module):
         maga_make_america_gay_again = self.out_layer(x) 
         return maga_make_america_gay_again
 
-
 class HybridEncoder(nn.Module):
     def __init__(
         self,
         num_features: int,
-        lstm_hidden_size: int = 128,
-        num_lstm_layers: int = 2,
-        tds_block_channels: Sequence[int] = [128, 256, 256],
-        kernel_width: int = 5,
-        gru_hidden_size: int = 128,
-        num_gru_layers: int = 2,
-        num_transformer_layers: int = 2,
-        num_heads: int = 8,
+        lstm_hidden_size: int,
+        num_lstm_layers: int,
+        tds_block_channels: Sequence[int],
+        kernel_width: int,
+        gru_hidden_size: int,
+        num_gru_layers: int,
+        num_transformer_layers: int,
+        num_heads: int,
     ) -> None:
         super().__init__()
 
@@ -586,9 +585,12 @@ class HybridEncoder(nn.Module):
             kernel_width=kernel_width,
         )
 
+        # Projection layer to align TDS output with GRU input
+        self.tds_to_gru_proj = nn.Linear(tds_block_channels[-1], gru_hidden_size * 2)
+
         # GRU Encoder (Bidirectional)
         self.gru = nn.GRU(
-            input_size=tds_block_channels[-1],  # Last TDS output channel
+            input_size=gru_hidden_size * 2,  # Matches projected TDS output
             hidden_size=gru_hidden_size,
             num_layers=num_gru_layers,
             batch_first=False,
@@ -611,6 +613,7 @@ class HybridEncoder(nn.Module):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x, _ = self.lstm(inputs)  # (T, N, lstm_hidden_size * 2)
         x = self.tds_block(x)  # (T, N, last_tds_channel)
+        x = self.tds_to_gru_proj(x)  # Align to GRU expected input size
         x, _ = self.gru(x)  # (T, N, gru_hidden_size * 2)
         x = self.transformer(x)  # (T, N, gru_hidden_size * 2)
         x = self.fc_block(x)
