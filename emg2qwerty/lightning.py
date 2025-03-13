@@ -889,9 +889,15 @@ class GRUCTCModule(pl.LightningModule):
 
 
 class TransformerCTCModule(pl.LightningModule):
+    NUM_BANDS: ClassVar[int] = 2
+    ELECTRODE_CHANNELS: ClassVar[int] = 16
+
     def __init__(
         self,
         in_features: int,
+        mlp_features: Sequence[int],
+        block_channels: Sequence[int],  # Unused, but keeping for consistency
+        kernel_width: int,  # Unused, but keeping for consistency
         num_layers: int,
         num_heads: int,
         feedforward_dim: int,
@@ -903,23 +909,33 @@ class TransformerCTCModule(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        # Model
+        num_features = self.NUM_BANDS * mlp_features[-1]
+        print(f"num_features: {num_features}")  # Debugging print
+
         self.model = nn.Sequential(
-            SpectrogramNorm(),
-            MultiBandRotationInvariantMLP(in_features=in_features, mlp_features=[feedforward_dim]),
+            # (T, N, bands=2, C=16, freq)
+            SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
+            # (T, N, bands=2, mlp_features[-1])
+            MultiBandRotationInvariantMLP(
+                in_features=in_features,
+                mlp_features=mlp_features,
+                num_bands=self.NUM_BANDS,
+            ),
+            # (T, N, num_features)
             nn.Flatten(start_dim=2),
             TransformerEncoder(
-                num_features=in_features,
+                num_features=num_features,
                 num_layers=num_layers,
                 num_heads=num_heads,
                 feedforward_dim=feedforward_dim,
                 dropout=dropout,
             ),
-            nn.Linear(in_features, charset().num_classes),
+            # (T, N, num_classes)
+            nn.Linear(num_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
         )
 
-        # Loss
+        # Criterion
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
 
         # Decoder
@@ -927,19 +943,28 @@ class TransformerCTCModule(pl.LightningModule):
 
         # Metrics
         metrics = MetricCollection([CharacterErrorRates()])
-        self.metrics = nn.ModuleDict({f"{phase}_metrics": metrics.clone(prefix=f"{phase}/") for phase in ["train", "val", "test"]})
+        self.metrics = nn.ModuleDict(
+            {
+                f"{phase}_metrics": metrics.clone(prefix=f"{phase}/")
+                for phase in ["train", "val", "test"]
+            }
+        )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.model(inputs)
 
-    def _step(self, phase: str, batch: dict[str, torch.Tensor]) -> torch.Tensor:
+    def _step(
+        self, phase: str, batch: dict[str, torch.Tensor], *args, **kwargs
+    ) -> torch.Tensor:
         inputs = batch["inputs"]
         targets = batch["targets"]
         input_lengths = batch["input_lengths"]
         target_lengths = batch["target_lengths"]
-        N = len(input_lengths)
+        N = len(input_lengths)  # batch_size
 
         emissions = self.forward(inputs)
+
+        # Adjust input lengths for CTC loss
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
@@ -950,11 +975,13 @@ class TransformerCTCModule(pl.LightningModule):
             target_lengths=target_lengths,
         )
 
+        # Decode emissions
         predictions = self.decoder.decode_batch(
             emissions=emissions.detach().cpu().numpy(),
             emission_lengths=emission_lengths.detach().cpu().numpy(),
         )
 
+        # Update metrics
         metrics = self.metrics[f"{phase}_metrics"]
         targets = targets.detach().cpu().numpy()
         target_lengths = target_lengths.detach().cpu().numpy()
@@ -970,14 +997,14 @@ class TransformerCTCModule(pl.LightningModule):
         self.log_dict(metrics.compute(), sync_dist=True)
         metrics.reset()
 
-    def training_step(self, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
-        return self._step("train", batch)
+    def training_step(self, *args, **kwargs) -> torch.Tensor:
+        return self._step("train", *args, **kwargs)
 
-    def validation_step(self, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
-        return self._step("val", batch)
+    def validation_step(self, *args, **kwargs) -> torch.Tensor:
+        return self._step("val", *args, **kwargs)
 
-    def test_step(self, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
-        return self._step("test", batch)
+    def test_step(self, *args, **kwargs) -> torch.Tensor:
+        return self._step("test", *args, **kwargs)
 
     def on_train_epoch_end(self) -> None:
         self._epoch_end("train")
