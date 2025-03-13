@@ -1023,7 +1023,8 @@ class TransformerCTCModule(pl.LightningModule):
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
 
-class HybridEncoderCTCModule(pl.LightningModule):
+
+class HybridCTCModule(pl.LightningModule):
     NUM_BANDS: ClassVar[int] = 2
     ELECTRODE_CHANNELS: ClassVar[int] = 16
 
