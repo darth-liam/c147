@@ -162,7 +162,7 @@ class TDSConvCTCModule(pl.LightningModule):
         self.save_hyperparameters()
 
         num_features = self.NUM_BANDS * mlp_features[-1]
-        print(f"this is the num of features: {num_features}")
+        print(f"this is the num of features= {num_features}")
 
         # Model
         # inputs: (T, N, bands=2, electrode_channels=16, freq)
