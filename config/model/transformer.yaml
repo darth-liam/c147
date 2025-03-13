@@ -4,7 +4,7 @@ module:
   in_features: 528  
   num_layers: 4
   num_heads: 8
-  ff_hidden_size: 256  
+  feedforward_dim: 256  
   dropout: 0.1
 
 datamodule:

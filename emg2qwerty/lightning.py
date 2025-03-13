@@ -896,8 +896,8 @@ class TransformerCTCModule(pl.LightningModule):
         in_features: int,
         num_layers: int,
         num_heads: int,
-        feedforward_dim: int,  # Match YAML name
-        dropout: float,  # Match YAML name
+        feedforward_dim: int, 
+        dropout: float, 
         decoder: DictConfig,
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
@@ -910,7 +910,7 @@ class TransformerCTCModule(pl.LightningModule):
             SpectrogramNorm(channels=num_features),
             MultiBandRotationInvariantMLP(
                 in_features=in_features,
-                mlp_features=[feedforward_dim],  # Adjusted
+                mlp_features=[feedforward_dim],
                 num_bands=self.NUM_BANDS,
             ),
             nn.Flatten(start_dim=2),
@@ -918,8 +918,8 @@ class TransformerCTCModule(pl.LightningModule):
                 num_features=num_features,
                 num_layers=num_layers,
                 num_heads=num_heads,
-                ff_hidden_size=feedforward_dim,  # Match YAML param
-                dropout=dropout,  # Added dropout
+                feedforward_dim=feedforward_dim, 
+                dropout=dropout,  
             ),
             nn.Linear(num_features, 128),
             nn.LogSoftmax(dim=-1),
