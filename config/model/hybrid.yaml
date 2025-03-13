@@ -1,5 +1,5 @@
 model:
-  _target_: HybridEncoderCTCModule
+  _target_: emg2qwerty.lightning.HybridEncoderCTCModule
   in_features: 200  # Adjust based on your input spectrogram size
   mlp_features: [256, 128]  # Feature extraction layers
   block_channels: [128, 256, 256]  # Channels for TDSConv blocks
