@@ -1062,12 +1062,12 @@ class HybridEncoderCTCModule(pl.LightningModule):
                 block_channels=block_channels,
                 kernel_width=kernel_width,
             ),
-            BiLSTMEncoder(
+            LSTMEncoder(
                 input_dim=num_features,
                 hidden_size=lstm_hidden_size,
                 num_layers=num_lstm_layers,
             ),
-            BiGRUEncoder(
+            GRUEncoder(
                 input_dim=lstm_hidden_size * 2,  # BiLSTM output
                 hidden_size=gru_hidden_size,
                 num_layers=num_gru_layers,
