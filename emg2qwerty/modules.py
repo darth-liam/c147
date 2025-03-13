@@ -597,7 +597,7 @@ class HybridEncoder(nn.Module):
 
         # Transformer Encoder
         self.transformer = TransformerEncoder(
-            input_dim=gru_hidden_size * 2,  # BiGRU output
+            num_features=gru_hidden_size * 2,  # BiGRU output
             num_layers=num_transformer_layers,
             num_heads=num_heads,
         )
