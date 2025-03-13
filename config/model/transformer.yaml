@@ -6,6 +6,7 @@ module:
   num_heads: 8
   feedforward_dim: 256  
   dropout: 0.1
+  mlp_features: [384]
 
 datamodule:
   _target_: emg2qwerty.lightning.WindowedEMGDataModule

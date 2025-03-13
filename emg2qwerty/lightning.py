@@ -162,6 +162,7 @@ class TDSConvCTCModule(pl.LightningModule):
         self.save_hyperparameters()
 
         num_features = self.NUM_BANDS * mlp_features[-1]
+        print(f"this is the num of features: {num_features}")
 
         # Model
         # inputs: (T, N, bands=2, electrode_channels=16, freq)
@@ -901,11 +902,12 @@ class TransformerCTCModule(pl.LightningModule):
         decoder: DictConfig,
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
+        mlp_features: Sequence[int],
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
 
-        num_features = self.NUM_BANDS * self.ELECTRODE_CHANNELS
+        num_features = self.NUM_BANDS * mlp_features[-1]
         self.model = nn.Sequential(
             SpectrogramNorm(channels=num_features),
             MultiBandRotationInvariantMLP(
@@ -921,11 +923,11 @@ class TransformerCTCModule(pl.LightningModule):
                 feedforward_dim=feedforward_dim, 
                 dropout=dropout,  
             ),
-            nn.Linear(num_features, 128),
+            nn.Linear(num_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
         )
 
-        self.ctc_loss = nn.CTCLoss(blank=0)
+        self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
         self.decoder = instantiate(decoder)
 
         metrics = MetricCollection([CharacterErrorRates()])
