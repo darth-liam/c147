@@ -1,9 +1,9 @@
 # @package _global_
 module:
   _target_: emg2qwerty.lightning.HybridCTCModule
-  in_features: 200  # Adjust based on your input spectrogram size
-  mlp_features: [256, 128]  # Feature extraction layers
-  block_channels: [128, 256, 256]  # Channels for TDSConv blocks
+  in_features: 528  # Adjust based on your input spectrogram size
+  mlp_features: [384]  # Feature extraction layers
+  block_channels: [24, 24, 24, 24]  # Channels for TDSConv blocks
   kernel_width: 5  # Kernel size for TDSConv
   lstm_hidden_size: 256  # Hidden size for BiLSTM
   gru_hidden_size: 256  # Hidden size for BiGRU
