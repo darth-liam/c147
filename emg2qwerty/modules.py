@@ -631,7 +631,4 @@ class HybridEncoder(nn.Module):
         x = self.fc_block(x)
         print("After Fully Connected Block:", x.shape)
 
-        x = self.out_layer(x)
-        print("After Output Layer:", x.shape)
-
         return x
