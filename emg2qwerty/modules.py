@@ -585,6 +585,7 @@ class HybridEncoder(nn.Module):
             kernel_width=kernel_width,
         )
 
+        
         # Projection layer to align TDS output with GRU input
         self.tds_to_gru_proj = nn.Linear(tds_block_channels[-1], gru_hidden_size * 2)
 
@@ -616,6 +617,8 @@ class HybridEncoder(nn.Module):
         
         # Ensure x is in (batch, seq_len, features) before linear layer
         x = x.permute(1, 0, 2)  # (N, T, last_tds_channel)
+        print("Shape before tds_to_gru_proj:", x.shape)
+
         x = self.tds_to_gru_proj(x)  # Align to GRU expected input size
         x = x.permute(1, 0, 2)  # (T, N, gru_hidden_size * 2)
 
