@@ -5,7 +5,7 @@ module:
   mlp_features: [384]  # Feature extraction layers
   block_channels: [24, 24, 24, 24]  # Channels for TDSConv blocks
   kernel_width: 32  # Kernel size for TDSConv
-  lstm_hidden_size: 128  # Hidden size for BiLSTM
+  lstm_hidden_size: 120  # Hidden size for BiLSTM
   gru_hidden_size: 128  # Hidden size for BiGRU
   num_lstm_layers: 2  # Number of LSTM layers
   num_gru_layers: 2  # Number of GRU layers
