@@ -569,7 +569,6 @@ class HybridEncoder(nn.Module):
     ) -> None:
         super().__init__()
 
-        # LSTM Encoder (Bidirectional)
         self.lstm = nn.LSTM(
             input_size=num_features,
             hidden_size=lstm_hidden_size,
@@ -578,37 +577,31 @@ class HybridEncoder(nn.Module):
             bidirectional=True,
         )
 
-        # TDS Conv Block
         self.tds_block = TDSConvEncoder(
-            num_features=lstm_hidden_size * 2,  # BiLSTM output
+            num_features=lstm_hidden_size * 2,
             block_channels=tds_block_channels,
             kernel_width=kernel_width,
         )
 
-        
-        # Projection layer to align TDS output with GRU input
-        self.tds_to_gru_proj = nn.Linear(tds_block_channels[-1], gru_hidden_size * 2)
+        self.tds_to_gru_proj = nn.Linear(240, gru_hidden_size * 2)
 
-        # GRU Encoder (Bidirectional)
+
         self.gru = nn.GRU(
-            input_size=gru_hidden_size * 2,  # Matches projected TDS output
+            input_size=gru_hidden_size * 2, 
             hidden_size=gru_hidden_size,
             num_layers=num_gru_layers,
             batch_first=False,
             bidirectional=True,
         )
 
-        # Transformer Encoder
         self.transformer = TransformerEncoder(
-            num_features=gru_hidden_size * 2,  # BiGRU output
+            num_features=gru_hidden_size * 2, 
             num_layers=num_transformer_layers,
             num_heads=num_heads,
         )
 
-        # Fully Connected Block
         self.fc_block = TDSFullyConnectedBlock(gru_hidden_size * 2)
 
-        # Output Layer
         self.out_layer = nn.Linear(gru_hidden_size * 2, num_features)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -617,7 +610,7 @@ class HybridEncoder(nn.Module):
         
         # Ensure x is in (batch, seq_len, features) before linear layer
         x = x.permute(1, 0, 2)  # (N, T, last_tds_channel)
-        print("Shape before tds_to_gru_proj:", x.shape)
+        #print("Shape before tds_to_gru_proj:", x.shape)
 
         x = self.tds_to_gru_proj(x)  # Align to GRU expected input size
         x = x.permute(1, 0, 2)  # (T, N, gru_hidden_size * 2)
